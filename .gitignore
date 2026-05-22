@@ -1,0 +1,43 @@
+# 本地数据目录（服务器、密钥、DNS 配置、日志等，切勿提交）
+/data/
+
+# PyInstaller 构建产物
+/dist/
+/build/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# 环境与密钥
+.env
+.env.*
+*.local
+
+# IDE / 编辑器
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 操作系统
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+
+# 日志与临时文件
+*.log
+*.tmp
+*.bak

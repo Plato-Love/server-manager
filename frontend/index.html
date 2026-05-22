@@ -1,0 +1,2187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title></title>
+    <style>
+        /* ==================== 基础重置与变量 ==================== */
+        :root {
+            --bg-base: #1e1e2e;
+            --bg-surface: #181825;
+            --bg-mantle: #181825;
+            --bg-overlay: #313244;
+            --text-primary: #cdd6f4;
+            --text-secondary: #a6adc8;
+            --text-muted: #6c7086;
+            --accent-blue: #89b4fa;
+            --accent-green: #a6e3a1;
+            --accent-red: #f38ba8;
+            --accent-yellow: #f9e2af;
+            --accent-peach: #fab387;
+            --accent-mauve: #cba6f7;
+            --border-color: #45475a;
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            --radius: 8px;
+            --radius-lg: 12px;
+            --transition: all 0.2s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            background: var(--bg-base);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background: var(--bg-base);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            margin: 0;
+        }
+
+        /* 自定义窗口顶栏（frameless，与主题色一致） */
+        .window-titlebar {
+            flex-shrink: 0;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-mantle);
+            border-bottom: 1px solid var(--border-color);
+            user-select: none;
+        }
+        .window-titlebar-drag {
+            flex: 1;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            padding-left: 14px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            -webkit-app-region: drag;
+            app-region: drag;
+        }
+        .window-titlebar-controls {
+            display: flex;
+            height: 100%;
+        }
+        .win-btn {
+            width: 46px;
+            height: 100%;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            line-height: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            -webkit-app-region: no-drag;
+            app-region: no-drag;
+        }
+        .win-btn svg {
+            width: 12px;
+            height: 12px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            pointer-events: none;
+        }
+        .win-btn:hover {
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text-primary);
+        }
+        .win-btn-close:hover {
+            background: #e64553;
+            color: #fff;
+        }
+
+        /* DNS 快速导入：拖拽识图区域 */
+        .dns-import-dropzone {
+            margin-top: 10px;
+            padding: 14px;
+            border: 2px dashed var(--border-color);
+            border-radius: var(--radius);
+            background: var(--bg-surface);
+            color: var(--text-muted);
+            font-size: 13px;
+            line-height: 1.6;
+            transition: var(--transition);
+            cursor: default;
+        }
+        .dns-import-dropzone-content {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 12px;
+            align-items: stretch;
+        }
+        .dns-import-dropzone-text {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 8px;
+            text-align: left;
+            padding: 2px 4px;
+        }
+        .dns-import-dropzone-preview {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            min-height: 96px;
+            max-height: 160px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            background: #11111b;
+        }
+        .dns-import-dropzone-preview img {
+            max-width: 100%;
+            max-height: 150px;
+            object-fit: contain;
+            display: none;
+        }
+        .dns-import-dropzone.has-image .dns-import-dropzone-preview img {
+            display: block;
+        }
+        .dns-import-dropzone.has-image #dns-import-image-placeholder {
+            display: none;
+        }
+        #dns-import-image-placeholder {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        .dns-import-dropzone.is-dragover {
+            border-color: var(--accent-blue);
+            background: rgba(137, 180, 250, 0.08);
+            color: var(--accent-blue);
+        }
+
+        /* ==================== 滚动条 ==================== */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+
+        /* ==================== 布局 ==================== */
+        .app-layout {
+            display: flex;
+            flex: 1;
+            min-height: 0;
+        }
+
+        /* ==================== 侧边栏 ==================== */
+        .sidebar {
+            width: 200px;
+            min-width: 200px;
+            background: var(--bg-surface);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            padding: 16px 0;
+        }
+
+        .sidebar-logo {
+            padding: 8px 20px 24px;
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--accent-blue);
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .sidebar-logo .logo-icon {
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-mauve));
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .sidebar-logo .logo-icon svg {
+            width: 16px;
+            height: 16px;
+            stroke: #1e1e2e;
+            fill: none;
+            stroke-width: 2.5;
+        }
+
+        .nav-list {
+            list-style: none;
+            flex: 1;
+        }
+
+        .nav-item {
+            padding: 10px 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-secondary);
+            transition: var(--transition);
+            border-left: 3px solid transparent;
+            font-size: 14px;
+            user-select: none;
+        }
+
+        .nav-item:hover {
+            background: var(--bg-overlay);
+            color: var(--text-primary);
+        }
+
+        .nav-item.active {
+            background: rgba(137, 180, 250, 0.1);
+            color: var(--accent-blue);
+            border-left-color: var(--accent-blue);
+        }
+
+        .nav-icon {
+            width: 18px;
+            height: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 18px;
+        }
+
+        .nav-icon svg {
+            width: 18px;
+            height: 18px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .sidebar-footer { display: none; }
+
+        /* ==================== 主内容区 ==================== */
+        .main-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            padding-bottom: 60px;
+        }
+
+        body.global-log-open .main-content {
+            padding-bottom: 240px;
+        }
+
+        .panel {
+            display: none;
+        }
+
+        .panel.active {
+            display: block;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .panel-title {
+            font-size: 22px;
+            font-weight: 600;
+        }
+
+        /* ==================== 按钮 ==================== */
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: var(--radius);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+
+        .btn svg {
+            width: 16px;
+            height: 16px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            flex-shrink: 0;
+        }
+
+        .btn-primary {
+            background: var(--accent-blue);
+            color: #1e1e2e;
+        }
+        .btn-primary:hover {
+            background: #74c7ec;
+            transform: translateY(-1px);
+        }
+
+        .btn-success {
+            background: var(--accent-green);
+            color: #1e1e2e;
+        }
+        .btn-success:hover {
+            background: #94e2d5;
+        }
+
+        .btn-danger {
+            background: var(--accent-red);
+            color: #1e1e2e;
+        }
+        .btn-danger:hover {
+            background: #eba0ac;
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+        .btn-ghost:hover {
+            background: var(--bg-overlay);
+            color: var(--text-primary);
+        }
+
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 12px;
+        }
+
+        .btn-icon {
+            padding: 6px;
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid transparent;
+            border-radius: 6px;
+        }
+        .btn-icon:hover {
+            background: var(--bg-overlay);
+            color: var(--text-primary);
+            border-color: var(--border-color);
+        }
+        .btn-icon.btn-icon-danger:hover {
+            color: var(--accent-red);
+            border-color: rgba(243, 139, 168, 0.3);
+            background: rgba(243, 139, 168, 0.1);
+        }
+
+        /* ==================== 搜索框 ==================== */
+        .search-box {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .search-input-wrapper {
+            flex: 1;
+            max-width: 400px;
+            position: relative;
+        }
+
+        .search-input-wrapper svg {
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            stroke: var(--text-muted);
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            pointer-events: none;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 8px 14px 8px 34px;
+            background: var(--bg-overlay);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            color: var(--text-primary);
+            font-size: 13px;
+            outline: none;
+            transition: var(--transition);
+        }
+        .search-input:focus {
+            border-color: var(--accent-blue);
+        }
+        .search-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* ==================== 服务器管理面板 ==================== */
+        .servers-layout {
+            display: flex;
+            gap: 16px;
+            height: calc(100vh - 140px);
+        }
+
+        /* 分类筛选栏 */
+        .category-sidebar {
+            width: 160px;
+            min-width: 160px;
+            background: var(--bg-surface);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-color);
+            padding: 12px 0;
+            overflow-y: auto;
+        }
+
+        .category-title {
+            font-size: 12px;
+            color: var(--text-muted);
+            padding: 4px 16px 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .category-actions {
+            display: flex;
+            gap: 6px;
+            padding: 0 12px 10px;
+        }
+
+        .category-actions .btn {
+            padding: 4px 8px;
+            font-size: 11px;
+        }
+
+        .category-item {
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--text-secondary);
+            transition: var(--transition);
+            border-left: 3px solid transparent;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .category-item:hover {
+            background: var(--bg-overlay);
+            color: var(--text-primary);
+        }
+        .category-item.active {
+            background: rgba(137, 180, 250, 0.1);
+            color: var(--accent-blue);
+            border-left-color: var(--accent-blue);
+        }
+
+        .category-count {
+            font-size: 11px;
+            background: var(--bg-overlay);
+            padding: 1px 6px;
+            border-radius: 10px;
+            color: var(--text-muted);
+            min-width: 20px;
+            text-align: center;
+        }
+        .category-item.active .category-count {
+            background: rgba(137, 180, 250, 0.2);
+            color: var(--accent-blue);
+        }
+
+        /* 服务器主区域 */
+        .servers-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .servers-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .servers-toolbar .search-input-wrapper {
+            flex: 1;
+            max-width: 360px;
+        }
+
+        .server-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 16px;
+        }
+
+        .server-card {
+            background: var(--bg-overlay);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 12px 16px;
+            transition: var(--transition);
+        }
+        .server-card:hover {
+            border-color: var(--accent-blue);
+        }
+
+        .server-card-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        .server-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .server-group {
+            font-size: 11px;
+            padding: 1px 8px;
+            background: rgba(137, 180, 250, 0.15);
+            color: var(--accent-blue);
+            border-radius: 10px;
+        }
+
+        .server-meta {
+            display: flex;
+            gap: 16px;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+
+        .server-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 280px;
+        }
+
+        .server-meta-item .label {
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+
+        .server-meta-item .value {
+            color: var(--text-secondary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .server-note {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .server-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .server-script-select {
+            padding: 5px 8px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 12px;
+            outline: none;
+            cursor: pointer;
+            max-width: 140px;
+        }
+        .server-script-select:focus {
+            border-color: var(--accent-blue);
+        }
+
+        .action-divider {
+            width: 1px;
+            height: 20px;
+            background: var(--border-color);
+            margin: 0 2px;
+        }
+
+        /* ==================== 模态框 ==================== */
+        .modal-overlay {
+            position: fixed;
+            top: 36px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-overlay.modal-active {
+            display: flex;
+        }
+
+        /* 局部阻塞层（挂在弹窗 .modal 上，避免整页卡死） */
+        .ui-busy-scope {
+            position: relative;
+        }
+        .ui-busy-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 30;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(17, 17, 27, 0.72);
+            border-radius: inherit;
+            pointer-events: all;
+        }
+        .ui-busy-overlay.is-active {
+            display: flex;
+        }
+        .ui-busy-panel {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 22px;
+            border-radius: 10px;
+            background: rgba(24, 24, 37, 0.95);
+            border: 1px solid var(--border-color);
+            min-width: 180px;
+        }
+        .ui-busy-spinner {
+            width: 28px;
+            height: 28px;
+            border: 3px solid rgba(137, 180, 250, 0.25);
+            border-top-color: var(--accent-blue);
+            border-radius: 50%;
+            animation: ui-busy-spin 0.8s linear infinite;
+        }
+        .ui-busy-text {
+            font-size: 13px;
+            color: var(--text-secondary);
+            text-align: center;
+            line-height: 1.5;
+        }
+        @keyframes ui-busy-spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .modal {
+            background: var(--bg-surface);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-color);
+            width: 520px;
+            max-width: 90vw;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--border-color);
+            cursor: move;
+            user-select: none;
+        }
+        .modal.modal-dragging {
+            user-select: none;
+        }
+
+        /* DNS 导入预览：每条记录两行卡片布局 */
+        .dns-import-preview-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .dns-import-card {
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 12px 14px;
+            background: var(--bg-base);
+        }
+        .dns-import-card.is-duplicate {
+            border-color: rgba(249, 226, 175, 0.55);
+            background: rgba(249, 226, 175, 0.06);
+        }
+        .dns-import-dup-badge {
+            display: inline-block;
+            margin-left: 8px;
+            padding: 1px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            color: var(--accent-yellow);
+            background: rgba(249, 226, 175, 0.15);
+        }
+        .dns-import-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px 14px;
+            margin-bottom: 10px;
+        }
+        .dns-import-row:last-child {
+            margin-bottom: 0;
+        }
+        .dns-import-row-2 {
+            grid-template-columns: minmax(120px, 1fr) minmax(200px, 2fr) 88px 40px;
+            align-items: end;
+        }
+        .dns-import-field label {
+            display: block;
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+        .dns-import-field .form-input,
+        .dns-import-field .form-select {
+            width: 100%;
+            padding: 6px 8px;
+            font-size: 12px;
+            box-sizing: border-box;
+        }
+        .dns-import-field-action {
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding-bottom: 2px;
+        }
+
+        .modal-title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 4px;
+            line-height: 1;
+            border-radius: 4px;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+        }
+        .modal-close:hover {
+            color: var(--text-primary);
+            background: var(--bg-overlay);
+        }
+        .modal-close svg {
+            width: 18px;
+            height: 18px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .modal-body {
+            padding: 20px 24px;
+        }
+
+        .modal-footer {
+            padding: 14px 24px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        /* ==================== 表单 ==================== */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 9px 12px;
+            background: var(--bg-overlay);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            color: var(--text-primary);
+            font-size: 13px;
+            outline: none;
+            transition: var(--transition);
+        }
+        .form-input:focus {
+            border-color: var(--accent-blue);
+        }
+        .form-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .form-select {
+            width: 100%;
+            padding: 9px 12px;
+            background: var(--bg-overlay);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            color: var(--text-primary);
+            font-size: 13px;
+            outline: none;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .form-select:focus {
+            border-color: var(--accent-blue);
+        }
+
+        .form-row {
+            display: flex;
+            gap: 12px;
+        }
+        .form-row .form-group {
+            flex: 1;
+        }
+
+        .dialog-message {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+
+        textarea.form-input {
+            resize: vertical;
+            min-height: 60px;
+            font-family: inherit;
+        }
+
+        /* ==================== 脚本工具面板 ==================== */
+        .scripts-layout {
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 140px);
+            gap: 12px;
+        }
+
+        /* 脚本列表区 */
+        .scripts-list-section {
+            background: var(--bg-surface);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-color);
+            padding: 14px;
+        }
+
+        .scripts-list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .scripts-list-header .section-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .scripts-list {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .script-tag {
+            padding: 6px 14px;
+            background: var(--bg-overlay);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .script-tag:hover {
+            border-color: var(--accent-blue);
+        }
+        .script-tag.active {
+            border-color: var(--accent-blue);
+            background: rgba(137, 180, 250, 0.15);
+            color: var(--accent-blue);
+        }
+
+        .script-tag-delete {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 14px;
+            padding: 0;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+        }
+        .script-tag-delete:hover {
+            color: var(--accent-red);
+        }
+        .script-tag-delete svg {
+            width: 12px;
+            height: 12px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .script-tag-type {
+            font-size: 10px;
+            padding: 1px 5px;
+            border-radius: 4px;
+            background: rgba(249, 226, 175, 0.15);
+            color: var(--accent-yellow);
+            font-weight: 600;
+        }
+
+        /* 脚本编辑区 */
+        .script-editor-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-height: 0;
+        }
+
+        .script-editor-toolbar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .script-name-input {
+            padding: 6px 12px;
+            background: var(--bg-overlay);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            color: var(--text-primary);
+            font-size: 13px;
+            width: 180px;
+            outline: none;
+        }
+        .script-name-input:focus {
+            border-color: var(--accent-blue);
+        }
+
+        .toolbar-divider {
+            width: 1px;
+            height: 24px;
+            background: var(--border-color);
+        }
+
+        /* 代码编辑区 */
+        .script-editor-area {
+            flex: 1;
+            display: flex;
+            gap: 12px;
+            min-height: 0;
+        }
+
+        .script-pane {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .script-pane-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .script-pane-title {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .script-code {
+            flex: 1;
+            padding: 14px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            color: var(--text-primary);
+            font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            resize: none;
+            outline: none;
+            min-height: 150px;
+            tab-size: 4;
+        }
+        .script-code:focus {
+            border-color: var(--accent-blue);
+        }
+
+        .script-output {
+            flex: 1;
+            padding: 14px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            color: var(--accent-green);
+            font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+            font-size: 12px;
+            line-height: 1.5;
+            resize: none;
+            outline: none;
+            min-height: 150px;
+        }
+
+        /* ==================== 设置面板 ==================== */
+        .settings-section {
+            max-width: 920px;
+        }
+
+        .dns-settings-modules {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .dns-settings-module {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 18px 20px;
+        }
+
+        .dns-settings-module-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0 0 14px 0;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .dns-settings-module .setting-item {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
+            padding: 12px 0;
+        }
+
+        .dns-settings-module .profile-row {
+            width: 100%;
+        }
+
+        .dns-settings-module .setting-input {
+            width: 100%;
+            max-width: none;
+            box-sizing: border-box;
+        }
+
+        .settings-group {
+            background: var(--bg-overlay);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-color);
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+
+        .settings-group-title {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
+
+        .setting-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .setting-item:last-child {
+            border-bottom: none;
+        }
+
+        .setting-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .setting-desc {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .setting-input {
+            padding: 7px 12px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            color: var(--text-primary);
+            font-size: 13px;
+            width: 320px;
+            outline: none;
+        }
+        .setting-input:focus {
+            border-color: var(--accent-blue);
+        }
+
+        .setting-switch {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-secondary);
+            font-size: 13px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .setting-switch input {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--accent-blue);
+        }
+
+        .profile-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            width: 100%;
+        }
+        .profile-row .form-select {
+            flex: 1;
+            min-width: 0;
+        }
+        .profile-row .btn {
+            padding: 6px 10px;
+            font-size: 12px;
+        }
+
+        .dns-profile-select {
+            padding: 5px 8px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 12px;
+            outline: none;
+            cursor: pointer;
+            min-width: 160px;
+        }
+        .dns-profile-select:focus {
+            border-color: var(--accent-blue);
+        }
+
+        .about-info {
+            margin-top: 24px;
+            padding: 16px;
+            background: var(--bg-overlay);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-color);
+        }
+        .about-info p {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+        .about-info .version {
+            color: var(--accent-blue);
+        }
+
+        /* ==================== Toast ==================== */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .toast {
+            padding: 10px 18px;
+            border-radius: var(--radius);
+            font-size: 13px;
+            color: #1e1e2e;
+            transform: translateX(120%);
+            transition: all 0.3s ease;
+            box-shadow: var(--shadow);
+            max-width: 360px;
+        }
+        .toast-show {
+            transform: translateX(0);
+        }
+        .toast-hide {
+            transform: translateX(120%);
+            opacity: 0;
+        }
+        .toast-success {
+            background: var(--accent-green);
+        }
+        .toast-error {
+            background: var(--accent-red);
+        }
+        .toast-info {
+            background: var(--accent-blue);
+        }
+
+        /* ==================== 全局日志抽屉 ==================== */
+        .global-log-drawer {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(24, 24, 37, 0.98);
+            border-top: 1px solid var(--border-color);
+            z-index: 1200;
+            transform: translateY(calc(100% - 36px));
+            transition: transform 0.2s ease;
+            box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.35);
+        }
+        .global-log-drawer.open {
+            transform: translateY(0);
+        }
+        .global-log-header {
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 12px;
+            cursor: pointer;
+            user-select: none;
+            color: var(--text-secondary);
+            font-size: 12px;
+        }
+        .global-log-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .global-log-btn {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            border-radius: 6px;
+            padding: 2px 8px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+        .global-log-btn:hover {
+            color: var(--text-primary);
+            border-color: var(--accent-blue);
+        }
+        .global-log-output {
+            width: 100%;
+            height: 180px;
+            border: 0;
+            border-top: 1px solid var(--border-color);
+            background: #11111b;
+            color: var(--accent-green);
+            font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+            font-size: 12px;
+            line-height: 1.5;
+            padding: 10px 12px;
+            resize: none;
+            outline: none;
+        }
+
+        /* ==================== 空状态 ==================== */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+            grid-column: 1 / -1;
+        }
+        .empty-state svg {
+            width: 48px;
+            height: 48px;
+            stroke: var(--text-muted);
+            fill: none;
+            stroke-width: 1.5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            margin-bottom: 16px;
+        }
+        .empty-state .text {
+            font-size: 14px;
+        }
+
+        /* ==================== 隐藏辅助 ==================== */
+        .hidden {
+            display: none !important;
+        }
+
+        /* DNS 管理面板 */
+        .dns-providers {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            padding-bottom: 2px;
+        }
+        .dns-providers::-webkit-scrollbar { height: 6px; }
+        .dns-provider-card { min-width: 180px; }
+        .dns-provider-card {
+            flex: 1;
+            padding: 16px;
+            background: var(--bg-overlay);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            cursor: pointer;
+            transition: var(--transition);
+            text-align: center;
+        }
+        .dns-provider-card:hover {
+            border-color: var(--accent-blue);
+        }
+        .dns-provider-card.active {
+            border-color: var(--accent-blue);
+            background: rgba(137, 180, 250, 0.1);
+        }
+        .dns-provider-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }
+        .dns-provider-status {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        .dns-provider-status.configured {
+            color: var(--accent-green);
+        }
+
+        .dns-domain-section {
+            margin-bottom: 20px;
+        }
+        .dns-domain-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .dns-domain-list {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .dns-domain-tag {
+            padding: 6px 14px;
+            background: var(--bg-overlay);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: var(--transition);
+            color: var(--text-secondary);
+        }
+        .dns-domain-tag:hover {
+            border-color: var(--accent-blue);
+        }
+        .dns-domain-tag.active {
+            border-color: var(--accent-blue);
+            background: rgba(137, 180, 250, 0.15);
+            color: var(--accent-blue);
+        }
+
+        .dns-records-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .dns-records-table-wrap {
+            overflow-x: auto;
+        }
+        .dns-records-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .dns-records-table th {
+            padding: 10px 12px;
+            text-align: left;
+            color: var(--text-muted);
+            font-weight: 500;
+            border-bottom: 1px solid var(--border-color);
+            white-space: nowrap;
+        }
+        .dns-records-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            max-width: 250px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .dns-records-table tr:hover td {
+            background: rgba(137, 180, 250, 0.05);
+        }
+        .dns-records-table .dns-type-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            background: rgba(203, 166, 247, 0.15);
+            color: var(--accent-mauve);
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .dns-records-table .dns-actions {
+            display: flex;
+            gap: 6px;
+        }
+        .dns-records-pagination {
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .dns-records-page-info {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        .dns-records-page-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .dns-records-page-actions .form-select {
+            width: auto;
+            min-width: 88px;
+            padding: 6px 8px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="window-titlebar" id="window-titlebar">
+        <span class="window-titlebar-drag pywebview-drag-region">服务器管家</span>
+        <div class="window-titlebar-controls">
+            <button type="button" class="win-btn" id="btn-window-minimize" title="最小化" aria-label="最小化">
+                <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+            <button type="button" class="win-btn" id="btn-window-maximize" title="最大化" aria-label="最大化">
+                <svg viewBox="0 0 24 24" id="win-icon-maximize"><rect x="5" y="5" width="14" height="14" rx="1"/></svg>
+            </button>
+            <button type="button" class="win-btn win-btn-close" id="btn-window-close" title="隐藏到托盘" aria-label="关闭">
+                <svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
+            </button>
+        </div>
+    </div>
+    <div class="app-layout">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <div class="logo-icon">
+                    <!-- 服务器图标 -->
+                    <svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><circle cx="6" cy="6" r="1"/><circle cx="6" cy="18" r="1"/></svg>
+                </div>
+            </div>
+            <ul class="nav-list">
+                <li class="nav-item active" data-panel="servers" id="nav-servers">
+                    <span class="nav-icon">
+                        <!-- 服务器/显示器图标 -->
+                        <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                    </span>
+                    服务器管理
+                </li>
+                <li class="nav-item" data-panel="scripts" id="nav-scripts">
+                    <span class="nav-icon">
+                        <!-- 代码/终端图标 -->
+                        <svg viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                    </span>
+                    脚本工具
+                </li>
+                <li class="nav-item" data-panel="dns" id="nav-dns">
+                    <span class="nav-icon">
+                        <!-- SVG 地球/网络图标，18x18, stroke风格, stroke-width 2, currentColor -->
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    </span>
+                    DNS 解析
+                </li>
+                <li class="nav-item" data-panel="settings" id="nav-settings">
+                    <span class="nav-icon">
+                        <!-- 齿轮图标 -->
+                        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    </span>
+                    设置
+                </li>
+            </ul>
+            <div class="sidebar-footer"></div>
+        </aside>
+
+        <!-- 主内容区 -->
+        <main class="main-content">
+
+            <!-- ========== 服务器管理面板 ========== -->
+            <div class="panel active" id="panel-servers">
+                <div class="panel-header">
+                    <h1 class="panel-title">服务器管理</h1>
+                </div>
+                <div class="servers-layout">
+                    <!-- 左侧分类筛选栏 -->
+                    <div class="category-sidebar">
+                        <div class="category-title">分组筛选</div>
+                        <div class="category-actions">
+                            <button class="btn btn-ghost btn-sm" id="btn-add-group" type="button">新增</button>
+                            <button class="btn btn-ghost btn-sm" id="btn-rename-group" type="button">编辑</button>
+                            <button class="btn btn-danger btn-sm" id="btn-delete-group" type="button">删除</button>
+                        </div>
+                        <div id="category-list">
+                            <div class="category-item active" data-group="" id="category-all">
+                                <span>全部</span>
+                                <span class="category-count" id="category-all-count">0</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 右侧主区域 -->
+                    <div class="servers-main">
+                        <div class="servers-toolbar">
+                            <div class="search-input-wrapper">
+                                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                                <input type="text" class="search-input" id="server-search" placeholder="搜索服务器（名称/IP/分组）...">
+                            </div>
+                            <button class="btn btn-primary" id="btn-add-server">
+                                <!-- 添加图标 -->
+                                <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                添加服务器
+                            </button>
+                        </div>
+                        <div class="server-grid" id="server-list">
+                            <div class="empty-state">
+                                <svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><circle cx="6" cy="6" r="1"/><circle cx="6" cy="18" r="1"/></svg>
+                                <div class="text">暂无服务器，点击上方按钮添加</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== 脚本工具面板 ========== -->
+            <div class="panel" id="panel-scripts">
+                <div class="panel-header">
+                    <h1 class="panel-title">脚本工具</h1>
+                </div>
+                <div class="scripts-layout">
+                    <!-- 上半部分 - 脚本列表 -->
+                    <div class="scripts-list-section">
+                        <div class="scripts-list-header">
+                            <span class="section-label">已保存脚本</span>
+                            <div style="display:flex;gap:8px;align-items:center">
+                                <button class="btn btn-ghost btn-sm" id="btn-add-script">
+                                    <!-- 添加图标 -->
+                                    <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                    新建
+                                </button>
+                                <button class="btn btn-primary btn-sm" id="btn-save-script">
+                                    <!-- 保存图标 -->
+                                    <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                                    保存
+                                </button>
+                            </div>
+                        </div>
+                        <div class="scripts-list" id="script-list">
+                            <span style="font-size:12px;color:var(--text-muted)">暂无脚本</span>
+                        </div>
+                    </div>
+
+                    <!-- 中间 - 操作工具栏 -->
+                    <div class="script-editor-toolbar">
+                        <input type="text" class="script-name-input" id="script-name" placeholder="脚本名称">
+                        <div class="toolbar-divider"></div>
+                        <!-- 执行按钮 -->
+                        <button class="btn btn-success" id="btn-run-script">
+                            <!-- 播放/运行图标 -->
+                            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                            执行脚本
+                        </button>
+                    </div>
+
+                    <!-- 下半部分 - 代码编辑区 -->
+                    <div class="script-editor-area">
+                        <div class="script-pane">
+                            <div class="script-pane-header">
+                                <span class="script-pane-title">Python 代码</span>
+                            </div>
+                            <textarea class="script-code" id="script-code" placeholder="# 在此编写 Python 脚本&#10;# 使用 print() 输出结果"></textarea>
+                        </div>
+                        <div class="script-pane">
+                            <div class="script-pane-header">
+                                <span class="script-pane-title">输出</span>
+                                <button class="btn btn-ghost btn-sm" id="btn-clear-output" style="padding:3px 8px;font-size:11px">清空</button>
+                            </div>
+                            <textarea class="script-output" id="script-output" readonly placeholder="脚本输出..."></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== DNS 解析面板 ========== -->
+            <div class="panel" id="panel-dns">
+                <div class="panel-header">
+                    <h1 class="panel-title">DNS 解析管理</h1>
+                    <button type="button" class="btn btn-primary btn-sm" id="btn-dns-import">快速导入</button>
+                </div>
+
+                <!-- 服务商选择 -->
+                <div class="dns-providers" id="dns-providers">
+                    <div class="dns-provider-card" data-provider="ali" id="dns-provider-ali">
+                        <div class="dns-provider-name">阿里云 DNS</div>
+                        <div class="dns-provider-status" id="dns-status-ali">未配置</div>
+                    </div>
+                    <div class="dns-provider-card" data-provider="dnspod" id="dns-provider-dnspod">
+                        <div class="dns-provider-name">DNSPod</div>
+                        <div class="dns-provider-status" id="dns-status-dnspod">未配置</div>
+                    </div>
+                    <div class="dns-provider-card" data-provider="tencent" id="dns-provider-tencent">
+                        <div class="dns-provider-name">腾讯云</div>
+                        <div class="dns-provider-status" id="dns-status-tencent">未配置</div>
+                    </div>
+                </div>
+
+                <!-- 域名选择区 -->
+                <div class="dns-domain-section" id="dns-domain-section" style="display:none">
+                    <div class="dns-domain-header">
+                        <span style="font-size:14px;font-weight:500;color:var(--text-primary)">选择域名</span>
+                        <div style="display:flex;gap:8px">
+                            <select class="dns-profile-select" id="dns-profile-select" style="display:none"></select>
+                            <button class="btn btn-ghost btn-sm" id="btn-dns-refresh-domains">
+                                <!-- SVG 刷新图标 -->
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                                刷新
+                            </button>
+                        </div>
+                    </div>
+                    <div class="dns-domain-list" id="dns-domain-list">
+                        <span style="font-size:12px;color:var(--text-muted)">请先选择服务商</span>
+                    </div>
+                </div>
+
+                <!-- 记录管理区 -->
+                <div class="dns-records-section" id="dns-records-section" style="display:none">
+                    <div class="dns-records-header">
+                        <span style="font-size:14px;font-weight:500;color:var(--text-primary)" id="dns-current-domain"></span>
+                        <div style="display:flex;gap:8px">
+                            <button class="btn btn-primary btn-sm" id="btn-dns-add-record">+ 添加记录</button>
+                            <button class="btn btn-ghost btn-sm" id="btn-dns-refresh-records">刷新</button>
+                        </div>
+                    </div>
+                    <div class="dns-records-table-wrap">
+                        <table class="dns-records-table">
+                            <thead>
+                                <tr>
+                                    <th>类型</th>
+                                    <th>主机记录</th>
+                                    <th>记录值</th>
+                                    <th>TTL</th>
+                                    <th>线路</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dns-records-body">
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="dns-records-pagination" id="dns-records-pagination" style="display:none">
+                        <div class="dns-records-page-info" id="dns-records-page-info">第 1 / 1 页，共 0 条</div>
+                        <div class="dns-records-page-actions">
+                            <select class="form-select" id="dns-records-page-size">
+                                <option value="20">20 条/页</option>
+                                <option value="50" selected>50 条/页</option>
+                                <option value="100">100 条/页</option>
+                            </select>
+                            <button class="btn btn-ghost btn-sm" id="btn-dns-prev-page" type="button">上一页</button>
+                            <button class="btn btn-ghost btn-sm" id="btn-dns-next-page" type="button">下一页</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== 设置面板 ========== -->
+            <div class="panel" id="panel-settings">
+                <div class="panel-header">
+                    <h1 class="panel-title">设置</h1>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-group">
+                        <div class="settings-group-title">浏览器配置</div>
+                        <div class="setting-item">
+                            <div>
+                                <div class="setting-label">浏览器可执行文件路径</div>
+                                <div class="setting-desc">用于宝塔面板自动登录及脚本录制，需为 Chromium 内核浏览器</div>
+                            </div>
+                            <input type="text" class="setting-input" id="setting-browser-path" placeholder="例如: D:\Brave\brave.exe">
+                        </div>
+                        <div class="setting-item">
+                            <div>
+                                <div class="setting-label">开机自启动</div>
+                                <div class="setting-desc">随 Windows 登录后自动启动，并保持单实例运行</div>
+                            </div>
+                            <label class="setting-switch">
+                                <input type="checkbox" id="setting-auto-start">
+                                <span>启用</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="settings-group">
+                        <div class="settings-group-title">DNS 服务商密钥</div>
+                        <div class="dns-settings-modules">
+                            <section class="dns-settings-module" aria-label="阿里云 DNS">
+                                <h2 class="dns-settings-module-title">阿里云</h2>
+                                <div class="setting-item">
+                                    <div class="profile-row">
+                                        <select class="form-select" id="setting-ali-profile"></select>
+                                        <button class="btn btn-ghost" id="btn-ali-profile-add" type="button">新增</button>
+                                        <button class="btn btn-ghost" id="btn-ali-profile-edit" type="button">编辑</button>
+                                        <button class="btn btn-danger" id="btn-ali-profile-del" type="button">删除</button>
+                                    </div>
+                                </div>
+                                <div class="setting-item">
+                                    <div class="setting-label">AccessKey ID</div>
+                                    <input type="text" class="setting-input" id="setting-ali-ak-id" placeholder="AccessKey ID">
+                                </div>
+                                <div class="setting-item">
+                                    <div class="setting-label">AccessKey Secret</div>
+                                    <input type="password" class="setting-input" id="setting-ali-ak-secret" placeholder="AccessKey Secret">
+                                </div>
+                            </section>
+
+                            <section class="dns-settings-module" aria-label="DNSPod">
+                                <h2 class="dns-settings-module-title">DNSPod（dnsapi.cn）</h2>
+                                <div class="setting-item">
+                                    <div class="profile-row">
+                                        <select class="form-select" id="setting-dnspod-profile"></select>
+                                        <button class="btn btn-ghost" id="btn-dnspod-profile-add" type="button">新增</button>
+                                        <button class="btn btn-ghost" id="btn-dnspod-profile-edit" type="button">编辑</button>
+                                        <button class="btn btn-danger" id="btn-dnspod-profile-del" type="button">删除</button>
+                                    </div>
+                                </div>
+                                <div class="setting-item">
+                                    <div class="setting-label">DNSPod ID</div>
+                                    <input type="text" class="setting-input" id="setting-dnspod-id" placeholder="DNSPod ID">
+                                </div>
+                                <div class="setting-item">
+                                    <div class="setting-label">DNSPod Token</div>
+                                    <input type="password" class="setting-input" id="setting-dnspod-token" placeholder="DNSPod Token">
+                                </div>
+                            </section>
+
+                            <section class="dns-settings-module" aria-label="腾讯云 DNS">
+                                <h2 class="dns-settings-module-title">腾讯云（云 API）</h2>
+                                <div class="setting-item">
+                                    <div class="profile-row">
+                                        <select class="form-select" id="setting-tencent-profile"></select>
+                                        <button class="btn btn-ghost" id="btn-tencent-profile-add" type="button">新增</button>
+                                        <button class="btn btn-ghost" id="btn-tencent-profile-edit" type="button">编辑</button>
+                                        <button class="btn btn-danger" id="btn-tencent-profile-del" type="button">删除</button>
+                                    </div>
+                                </div>
+                                <div class="setting-item">
+                                    <div class="setting-label">SecretId</div>
+                                    <input type="text" class="setting-input" id="setting-tencent-sid" placeholder="SecretId">
+                                </div>
+                                <div class="setting-item">
+                                    <div class="setting-label">SecretKey</div>
+                                    <input type="password" class="setting-input" id="setting-tencent-skey" placeholder="SecretKey">
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+                    <div class="settings-group">
+                        <div class="settings-group-title">DNS 快速导入（AI）</div>
+                        <div class="setting-item">
+                            <div class="setting-label">API Key</div>
+                            <input type="password" class="setting-input" id="setting-dns-ai-api-key" placeholder="crsr_...">
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-label">Agent 路径</div>
+                            <input type="text" class="setting-input" id="setting-dns-ai-agent-path" placeholder="留空自动检测">
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-label">代理</div>
+                            <input type="text" class="setting-input" id="setting-dns-ai-proxy" placeholder="http://127.0.0.1:7890">
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-label">模型</div>
+                            <input type="text" class="setting-input" id="setting-dns-ai-model" placeholder="留空=Composer 2.5 Fast；default=账号默认">
+                        </div>
+                        <div class="setting-item">
+                            <div>
+                                <div class="setting-label">启用 AI 解析</div>
+                            </div>
+                            <label class="setting-switch">
+                                <input type="checkbox" id="setting-dns-ai-enabled" checked>
+                                <span>启用</span>
+                            </label>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" id="btn-save-settings">
+                        保存设置
+                    </button>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- ========== 服务器模态框 ========== -->
+    <div class="modal-overlay" id="server-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="modal-title" id="server-modal-title">添加服务器</span>
+                <button class="modal-close" id="btn-close-server-modal">
+                    <!-- 关闭/X 图标 -->
+                    <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="edit-server-id">
+                <div class="form-group">
+                    <label class="form-label">服务器名称 *</label>
+                    <input type="text" class="form-input" id="field-name" placeholder="例如: 生产服务器A">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">宝塔面板地址</label>
+                    <input type="text" class="form-input" id="field-bt-url" placeholder="例如: http://1.2.3.4:8888/xxxxxxxx">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">宝塔用户名</label>
+                        <input type="text" class="form-input" id="field-bt-user" placeholder="宝塔登录用户名">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">宝塔密码</label>
+                        <input type="password" class="form-input" id="field-bt-pass" placeholder="宝塔登录密码">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">分组</label>
+                        <select class="form-select" id="field-group">
+                            <option value="">未分组</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">绑定脚本</label>
+                        <select class="form-select" id="field-bind-script">
+                            <option value="">不绑定脚本</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">登录后跳转路径</label>
+                        <input type="text" class="form-input" id="field-bt-redirect" placeholder="例如: /ssl/domain">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">备注</label>
+                    <textarea class="form-input" id="field-note" placeholder="备注信息..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="btn-cancel-server">取消</button>
+                <button class="btn btn-primary" id="btn-save-server">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DNS 记录模态框 -->
+    <div class="modal-overlay" id="dns-record-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="modal-title" id="dns-modal-title">添加记录</span>
+                <button class="modal-close" id="btn-close-dns-modal">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="dns-edit-record-id">
+                <input type="hidden" id="dns-edit-zone-id">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">记录类型 *</label>
+                        <select class="form-input" id="dns-field-type">
+                            <option value="A">A - IPv4 地址</option>
+                            <option value="AAAA">AAAA - IPv6 地址</option>
+                            <option value="CNAME">CNAME - 别名</option>
+                            <option value="MX">MX - 邮件</option>
+                            <option value="TXT">TXT - 文本</option>
+                            <option value="NS">NS - 域名服务器</option>
+                            <option value="SRV">SRV - 服务定位</option>
+                            <option value="CAA">CAA - CA 证书授权</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="dns-rr-group">
+                        <label class="form-label" id="dns-rr-label">主机记录 *</label>
+                        <input type="text" class="form-input" id="dns-field-rr" placeholder="例如: www 或 @">
+                    </div>
+                </div>
+                <div class="form-group" id="dns-value-group">
+                    <label class="form-label" id="dns-value-label">记录值 *</label>
+                    <input type="text" class="form-input" id="dns-field-value" placeholder="例如: 1.2.3.4 或 example.com">
+                </div>
+                <!-- MX 优先级 -->
+                <div class="form-group" id="dns-mx-priority-group" style="display:none">
+                    <label class="form-label">MX 优先级</label>
+                    <input type="number" class="form-input" id="dns-field-mx-priority" value="10" min="1" max="65535" placeholder="数字越小优先级越高">
+                </div>
+                <!-- SRV 字段 -->
+                <div id="dns-srv-fields" style="display:none">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">优先级</label>
+                            <input type="number" class="form-input" id="dns-field-srv-priority" value="10" min="0" max="65535">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">权重</label>
+                            <input type="number" class="form-input" id="dns-field-srv-weight" value="5" min="0" max="65535">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">端口</label>
+                            <input type="number" class="form-input" id="dns-field-srv-port" value="443" min="1" max="65535">
+                        </div>
+                    </div>
+                </div>
+                <!-- CAA 字段 -->
+                <div id="dns-caa-fields" style="display:none">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">CAA 标志</label>
+                            <select class="form-input" id="dns-field-caa-flags">
+                                <option value="0">0 - 非关键</option>
+                                <option value="128">128 - 关键</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">CAA 标签</label>
+                            <select class="form-input" id="dns-field-caa-tag">
+                                <option value="issue">issue - 授权CA</option>
+                                <option value="issuewild">issuewild - 通配符授权</option>
+                                <option value="iodef">iodef - 报告方式</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">TTL (秒)</label>
+                        <select class="form-input" id="dns-field-ttl">
+                            <option value="60">60 (1分钟)</option>
+                            <option value="300">300 (5分钟)</option>
+                            <option value="600" selected>600 (10分钟)</option>
+                            <option value="1800">1800 (30分钟)</option>
+                            <option value="3600">3600 (1小时)</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="dns-field-line-group">
+                        <label class="form-label">解析线路</label>
+                        <select class="form-input" id="dns-field-line">
+                            <option value="default">默认</option>
+                            <option value="telecom">电信</option>
+                            <option value="unicom">联通</option>
+                            <option value="mobile">移动</option>
+                            <option value="overseas">海外</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group" id="dns-field-proxied-group" style="display:none">
+                    <label class="form-label">
+                        <input type="checkbox" id="dns-field-proxied"> 启用代理
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="btn-cancel-dns">取消</button>
+                <button class="btn btn-primary" id="btn-save-dns">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DNS 快速导入模态框 -->
+    <div class="modal-overlay" id="dns-import-modal">
+        <div class="modal" style="width:680px">
+            <div class="modal-header">
+                <span class="modal-title">快速导入 DNS 记录</span>
+                <button class="modal-close" id="btn-close-dns-import-modal">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- 步骤1：粘贴 / 识图导入 -->
+                <div id="dns-import-step1">
+                    <div class="form-group">
+                        <label class="form-label">粘贴控制台复制的记录，或截图（Ctrl+V / 拖拽）</label>
+                        <textarea class="form-input" id="dns-import-text" rows="6" placeholder="直接粘贴阿里云/腾讯云表格文字（含校验域名、主机记录、记录类型、记录值），或粘贴 JSON；截图可拖到下方"></textarea>
+                    </div>
+                    <div class="dns-import-dropzone" id="dns-import-dropzone">
+                        <div class="dns-import-dropzone-content">
+                            <div class="dns-import-dropzone-text">
+                                <div>左侧粘贴文字，右侧放截图，支持拖拽到此区域</div>
+                                <div style="font-size:12px;opacity:0.85">支持 PNG / JPG / WEBP / GIF</div>
+                            </div>
+                            <div class="dns-import-dropzone-preview">
+                                <img id="dns-import-image-preview" alt="待识别截图">
+                                <span id="dns-import-image-placeholder">未附加图片</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="dns-import-config-hint" style="font-size:12px;color:var(--text-muted);margin-bottom:8px;line-height:1.5"></div>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center;margin-top:8px">
+                        <div style="display:flex;flex-wrap:wrap;gap:8px">
+                            <button type="button" class="btn btn-ghost btn-sm" id="btn-dns-paste-clipboard-image">读取剪贴板图片</button>
+                            <button type="button" class="btn btn-ghost btn-sm" id="btn-dns-import-pick-image">选择本地图片</button>
+                            <button type="button" class="btn btn-ghost btn-sm" id="btn-dns-import-clear-image">移除图片</button>
+                        </div>
+                        <button type="button" class="btn btn-primary btn-sm" id="btn-dns-import-parse">AI 解析并预览</button>
+                    </div>
+                    <input type="file" id="dns-import-file-input" accept="image/*" style="display:none">
+                </div>
+                <!-- 步骤2：预览表格 -->
+                <div id="dns-import-step2" style="display:none">
+                    <div style="margin-bottom:12px;font-size:13px;color:var(--text-secondary)">
+                        共解析到 <span id="dns-import-count" style="color:var(--accent-blue);font-weight:600">0</span> 条记录，可编辑后确认导入
+                    </div>
+                    <div class="dns-import-preview-list" id="dns-import-preview-list" style="max-height:400px;overflow-y:auto"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="btn-dns-import-back" style="display:none">返回修改</button>
+                <button class="btn btn-primary" id="btn-dns-import-confirm" style="display:none">确认导入</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通用对话框（替代浏览器默认 prompt/confirm） -->
+    <div class="modal-overlay" id="dialog-modal">
+        <div class="modal" style="width: 420px;">
+            <div class="modal-header">
+                <span class="modal-title" id="dialog-title">提示</span>
+                <button class="modal-close" id="btn-close-dialog-modal">
+                    <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="dialog-message" id="dialog-message"></div>
+                <div class="form-group" id="dialog-input-group" style="display:none;">
+                    <input type="text" class="form-input" id="dialog-input" placeholder="">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="btn-dialog-cancel">取消</button>
+                <button class="btn btn-primary" id="btn-dialog-confirm">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 密钥档案编辑弹窗 -->
+    <div class="modal-overlay" id="profile-modal">
+        <div class="modal" style="width:520px">
+            <div class="modal-header">
+                <span class="modal-title" id="profile-modal-title">编辑档案</span>
+                <button class="modal-close" id="btn-close-profile-modal">
+                    <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="profile-provider">
+                <input type="hidden" id="profile-id">
+                <div class="form-group">
+                    <label class="form-label">档案名称 *</label>
+                    <input type="text" class="form-input" id="profile-name" placeholder="例如：主账号">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" id="profile-key1-label">Key1</label>
+                        <input type="text" class="form-input" id="profile-key1" placeholder="">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" id="profile-key2-label">Key2</label>
+                        <input type="password" class="form-input" id="profile-key2" placeholder="">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="btn-cancel-profile">取消</button>
+                <button class="btn btn-primary" id="btn-save-profile">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 容器 -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- 全局日志抽屉 -->
+    <div class="global-log-drawer" id="global-log-drawer">
+        <div class="global-log-header" id="global-log-header">
+            <span>运行日志（全局）</span>
+            <div class="global-log-actions">
+                <button class="global-log-btn" id="btn-clear-global-log" type="button">清空</button>
+                <button class="global-log-btn" id="btn-toggle-global-log" type="button">展开</button>
+            </div>
+        </div>
+        <textarea id="global-log-output" class="global-log-output" readonly placeholder="脚本实时日志会显示在这里..."></textarea>
+    </div>
+
+    <script src="ui-dialog.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
