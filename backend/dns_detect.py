@@ -64,21 +64,38 @@ def guess_zone_domain_from_fqdn(fqdn: str) -> str:
 
 def normalize_console_table_record(rec: dict) -> dict:
     """
-    「校验域名」列常为待验证的完整主机名，「主机记录」为相对根域的 RR。
-    例：校验域名 tongxinxuetang.dingdong.work + RR _dnsauth.tongxinxuetang → 域 dingdong.work
+    规范化 DNS 记录：
+    1. domain 若为完整主机名（3+段），拆分为根域 + rr
+    2. rr 若包含域名后缀，剥离
+    例：rr=_dnsauth.tongxinxuetang.dingdong.work domain=dingdong.work → rr=_dnsauth.tongxinxuetang
     """
     raw = (rec.get('domain') or '').strip().rstrip('.')
     rr = (rec.get('rr') or '').strip() or '@'
-    if not raw:
-        return rec
-    parts = [p for p in raw.split('.') if p]
-    if len(parts) >= 3:
-        rec['verify_host'] = raw
-        rec['domain'] = '.'.join(parts[-2:])
-        if not rr or rr == '@':
-            rec['rr'] = '.'.join(parts[:-2]) or '@'
-    elif len(parts) == 2:
-        rec['domain'] = raw
+
+    if raw:
+        parts = [p for p in raw.split('.') if p]
+        if len(parts) >= 3:
+            rec['verify_host'] = raw
+            rec['domain'] = '.'.join(parts[-2:])
+            if not rr or rr == '@':
+                rec['rr'] = '.'.join(parts[:-2]) or '@'
+        elif len(parts) == 2:
+            rec['domain'] = raw
+
+    domain = (rec.get('domain') or '').strip().rstrip('.')
+    rr = (rec.get('rr') or '').strip() or '@'
+
+    if domain and rr and rr != '@':
+        suffix = '.' + domain.lower()
+        if rr.lower().endswith(suffix):
+            rr = rr[:-len(suffix)].rstrip('.')
+            rec['rr'] = rr or '@'
+        elif rr.lower() == domain.lower():
+            rec['rr'] = '@'
+
+    if not rec.get('domain'):
+        rec['domain'] = ''
+
     return rec
 
 
@@ -94,6 +111,20 @@ def enrich_records_with_domain_hints(records: list[dict], text: str) -> list[dic
             continue
         rr = str(rec.get('rr') or '').strip()
         matched = ''
+        for d in hints:
+            d_lower = d.lower()
+            if rr and rr != '@':
+                if rr.lower() == d_lower:
+                    matched = d
+                    rec['rr'] = '@'
+                    break
+                if rr.lower().endswith('.' + d_lower):
+                    matched = d
+                    rec['rr'] = rr[:-(len(d_lower) + 1)].rstrip('.') or '@'
+                    break
+        if matched:
+            rec['domain'] = matched
+            continue
         for d in hints:
             candidates = []
             if rr and rr != '@':

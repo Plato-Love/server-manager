@@ -13,8 +13,11 @@ from .storage import _read_json
 DNS_PARSE_CONFIG_FILE = os.path.join(data_dir(), 'dns_parse_config.json')
 
 PARSE_MODE_CLI = 'cli'
+PARSE_MODE_API = 'api'
 
 DEFAULT_DNS_AI_MODEL = 'composer-2-fast'
+DEFAULT_SILICONFLOW_MODEL = 'Qwen/Qwen3.5-4B'
+SILICONFLOW_BASE_URL = 'https://api.siliconflow.cn/v1'
 ACCOUNT_DEFAULT_MODEL_ALIASES = frozenset({'default', 'account', 'auto'})
 
 _DEFAULTS = {
@@ -23,6 +26,9 @@ _DEFAULTS = {
     'proxy_url': '',
     'cursor_model': '',
     'enabled': True,
+    'sf_api_key': '',
+    'sf_base_url': SILICONFLOW_BASE_URL,
+    'sf_model': DEFAULT_SILICONFLOW_MODEL,
 }
 
 
@@ -45,6 +51,9 @@ def get_dns_parse_config() -> dict:
     cfg['proxy_url'] = (cfg.get('proxy_url') or '').strip()
     cfg['cursor_model'] = (cfg.get('cursor_model') or '').strip()
     cfg['enabled'] = bool(cfg.get('enabled', True))
+    cfg['sf_api_key'] = (cfg.get('sf_api_key') or '').strip()
+    cfg['sf_base_url'] = (cfg.get('sf_base_url') or '').strip() or SILICONFLOW_BASE_URL
+    cfg['sf_model'] = (cfg.get('sf_model') or '').strip() or DEFAULT_SILICONFLOW_MODEL
     return cfg
 
 
@@ -78,25 +87,32 @@ def get_dns_parse_config_public() -> dict:
             masked = key[:4] + '***'
         else:
             masked = key[:8] + '...' + key[-4:]
+    sf_key = cfg.get('sf_api_key') or ''
+    sf_masked = ''
+    if sf_key:
+        if len(sf_key) <= 12:
+            sf_masked = sf_key[:4] + '***'
+        else:
+            sf_masked = sf_key[:8] + '...' + sf_key[-4:]
     proxy = cfg.get('proxy_url') or ''
     cli_model, model_label = resolve_cursor_model(cfg)
+    sf_model = cfg.get('sf_model') or DEFAULT_SILICONFLOW_MODEL
+    sf_base = cfg.get('sf_base_url') or SILICONFLOW_BASE_URL
     return {
         'config_path': DNS_PARSE_CONFIG_FILE,
-        'parse_mode': PARSE_MODE_CLI,
-        'parse_mode_label': 'CLI',
+        'parse_mode': PARSE_MODE_API if sf_key else PARSE_MODE_CLI,
+        'parse_mode_label': 'API' if sf_key else 'CLI',
         'enabled': cfg.get('enabled', True),
-        'has_api_key': bool(key),
-        'uses_system_account': not bool(key),
-        'auth_mode': 'config_key' if key else 'system_account',
-        'api_key_masked': masked,
-        'cursor_agent_path': cfg.get('cursor_agent_path') or '',
+        'has_api_key': bool(sf_key),
+        'api_key_masked': sf_masked,
+        'sf_base_url': sf_base,
+        'sf_model': sf_model,
         'proxy_url': proxy,
         'has_proxy': bool(proxy),
         'cursor_model': cfg.get('cursor_model') or '',
-        'effective_model': cli_model or '',
-        'effective_model_label': model_label,
-        'default_model': DEFAULT_DNS_AI_MODEL,
-        'model_note': '',
+        'effective_model': sf_model if sf_key else (cli_model or ''),
+        'effective_model_label': sf_model if sf_key else model_label,
+        'default_model': DEFAULT_SILICONFLOW_MODEL,
     }
 
 
@@ -121,4 +137,10 @@ def update_dns_parse_config(updates: dict) -> dict:
         cfg['cursor_model'] = (updates.get('cursor_model') or '').strip()
     if 'enabled' in updates:
         cfg['enabled'] = bool(updates.get('enabled'))
+    if 'sf_api_key' in updates:
+        cfg['sf_api_key'] = (updates.get('sf_api_key') or '').strip()
+    if 'sf_base_url' in updates:
+        cfg['sf_base_url'] = (updates.get('sf_base_url') or '').strip() or SILICONFLOW_BASE_URL
+    if 'sf_model' in updates:
+        cfg['sf_model'] = (updates.get('sf_model') or '').strip() or DEFAULT_SILICONFLOW_MODEL
     return _write_dns_parse_config(cfg)

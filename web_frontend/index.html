@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DNS 解析管理</title>
+    <style>
+        :root {
+            --bg-base: #1e1e2e;
+            --bg-surface: #181825;
+            --bg-overlay: #313244;
+            --text-primary: #cdd6f4;
+            --text-secondary: #a6adc8;
+            --text-muted: #6c7086;
+            --accent-blue: #89b4fa;
+            --accent-green: #a6e3a1;
+            --accent-red: #f38ba8;
+            --accent-yellow: #f9e2af;
+            --accent-mauve: #cba6f7;
+            --accent-peach: #fab387;
+            --border-color: #45475a;
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            --radius: 8px;
+            --radius-lg: 12px;
+            --transition: all 0.2s ease;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; }
+        html { background: var(--bg-base); }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background: var(--bg-base); color: var(--text-primary);
+            height: 100vh; overflow: hidden; display: flex; flex-direction: column;
+        }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+        .app-header {
+            flex-shrink: 0;
+            background: var(--bg-surface); border-bottom: 1px solid var(--border-color);
+            padding: 0 28px; display: flex; align-items: stretch; justify-content: space-between;
+            height: 52px;
+        }
+        .app-title {
+            font-size: 18px; font-weight: 700; color: var(--accent-blue);
+            display: flex; align-items: center; gap: 10px; white-space: nowrap;
+        }
+        .app-title svg { width: 22px; height: 22px; stroke: var(--accent-blue); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+        .header-tabs {
+            display: flex; align-items: stretch; gap: 0;
+        }
+        .header-tabs .tab-item {
+            padding: 0 20px; font-size: 14px; color: var(--text-secondary);
+            cursor: pointer; border-bottom: 2px solid transparent;
+            transition: var(--transition); display: flex; align-items: center;
+        }
+        .header-tabs .tab-item:hover { color: var(--text-primary); }
+        .header-tabs .tab-item.active { color: var(--accent-blue); border-bottom-color: var(--accent-blue); }
+
+        .app-body {
+            flex: 1; min-height: 0; overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+
+        .tab-panel { display: none; flex: 1; min-height: 0; overflow: hidden; }
+        .tab-panel.active { display: flex; flex-direction: column; }
+
+        .dns-tab-scroll {
+            flex: 1; min-height: 0; overflow-y: auto;
+            max-width: 1200px; margin: 0 auto; width: 100%; padding: 24px 28px;
+        }
+
+        .btn {
+            padding: 8px 16px; border: none; border-radius: var(--radius); cursor: pointer;
+            font-size: 13px; font-weight: 500; transition: var(--transition);
+            display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+        }
+        .btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+        .btn-primary { background: var(--accent-blue); color: #1e1e2e; }
+        .btn-primary:hover { background: #74c7ec; transform: translateY(-1px); }
+        .btn-success { background: var(--accent-green); color: #1e1e2e; }
+        .btn-success:hover { background: #94e2d5; }
+        .btn-danger { background: var(--accent-red); color: #1e1e2e; }
+        .btn-danger:hover { background: #eba0ac; }
+        .btn-ghost { background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); }
+        .btn-ghost:hover { background: var(--bg-overlay); color: var(--text-primary); }
+        .btn-sm { padding: 5px 10px; font-size: 12px; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .dns-providers { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
+        .dns-provider-card {
+            flex: 1; min-width: 180px; padding: 16px; background: var(--bg-overlay);
+            border: 1px solid var(--border-color); border-radius: var(--radius-lg);
+            cursor: pointer; transition: var(--transition); text-align: center;
+        }
+        .dns-provider-card:hover { border-color: var(--accent-blue); }
+        .dns-provider-card.active { border-color: var(--accent-blue); background: rgba(137, 180, 250, 0.1); }
+        .dns-provider-name { font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+        .dns-provider-status { font-size: 12px; color: var(--text-muted); }
+        .dns-provider-status.configured { color: var(--accent-green); }
+
+        .dns-domain-section { margin-bottom: 20px; }
+        .dns-domain-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .dns-domain-list { display: flex; gap: 8px; flex-wrap: wrap; }
+        .dns-domain-tag {
+            padding: 6px 14px; background: var(--bg-overlay); border: 1px solid var(--border-color);
+            border-radius: 20px; font-size: 13px; cursor: pointer; transition: var(--transition); color: var(--text-secondary);
+        }
+        .dns-domain-tag:hover { border-color: var(--accent-blue); }
+        .dns-domain-tag.active { border-color: var(--accent-blue); background: rgba(137, 180, 250, 0.15); color: var(--accent-blue); }
+
+        .dns-records-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+        .dns-records-search { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 200px; max-width: 360px; }
+        .dns-records-search input { width: 100%; padding: 6px 10px; background: var(--bg-overlay); border: 1px solid var(--border-color); border-radius: var(--radius); color: var(--text-primary); font-size: 13px; outline: none; transition: var(--transition); }
+        .dns-records-search input:focus { border-color: var(--accent-blue); }
+        .dns-records-search input::placeholder { color: var(--text-muted); }
+        .dns-records-table-wrap { overflow-x: auto; }
+        .dns-records-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .dns-records-table th { padding: 10px 12px; text-align: left; color: var(--text-muted); font-weight: 500; border-bottom: 1px solid var(--border-color); white-space: nowrap; }
+        .dns-records-table td { padding: 10px 12px; border-bottom: 1px solid var(--border-color); color: var(--text-secondary); max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .dns-records-table tr:hover td { background: rgba(137, 180, 250, 0.05); }
+        .dns-type-badge { display: inline-block; padding: 2px 8px; background: rgba(203, 166, 247, 0.15); color: var(--accent-mauve); border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .dns-actions { display: flex; gap: 6px; }
+        .dns-records-pagination { margin-top: 10px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+        .dns-records-page-info { font-size: 12px; color: var(--text-muted); }
+        .dns-records-page-actions { display: flex; align-items: center; gap: 8px; }
+
+        .form-group { margin-bottom: 16px; }
+        .form-label { display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; }
+        .form-input, .form-select {
+            width: 100%; padding: 9px 12px; background: var(--bg-overlay);
+            border: 1px solid var(--border-color); border-radius: var(--radius);
+            color: var(--text-primary); font-size: 13px; outline: none; transition: var(--transition);
+        }
+        .form-input:focus, .form-select:focus { border-color: var(--accent-blue); }
+        .form-input::placeholder { color: var(--text-muted); }
+        .form-row { display: flex; gap: 12px; }
+        .form-row .form-group { flex: 1; }
+
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6);
+            display: none; align-items: center; justify-content: center; z-index: 1000;
+        }
+        .modal-overlay.modal-active { display: flex; }
+        .modal {
+            background: var(--bg-surface); border-radius: var(--radius-lg);
+            border: 1px solid var(--border-color); width: 520px; max-width: 90vw;
+            max-height: 85vh; overflow-y: auto; box-shadow: var(--shadow);
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 18px 24px; border-bottom: 1px solid var(--border-color); }
+        .modal-title { font-size: 16px; font-weight: 600; }
+        .modal-close {
+            background: none; border: none; color: var(--text-muted); cursor: pointer;
+            padding: 4px; line-height: 1; border-radius: 4px; transition: var(--transition); display: flex; align-items: center;
+        }
+        .modal-close:hover { color: var(--text-primary); background: var(--bg-overlay); }
+        .modal-close svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .modal-body { padding: 20px 24px; }
+        .modal-footer { padding: 14px 24px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px; }
+
+        .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+        .toast { padding: 10px 18px; border-radius: var(--radius); font-size: 13px; color: #1e1e2e; transform: translateX(120%); transition: all 0.3s ease; box-shadow: var(--shadow); max-width: 360px; }
+        .toast-show { transform: translateX(0); }
+        .toast-hide { transform: translateX(120%); opacity: 0; }
+        .toast-success { background: var(--accent-green); }
+        .toast-error { background: var(--accent-red); }
+        .toast-info { background: var(--accent-blue); }
+
+        .loading-spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid rgba(137, 180, 250, 0.25); border-top-color: var(--accent-blue); border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .center-loading { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 40px; color: var(--text-muted); font-size: 13px; }
+
+        .import-split {
+            flex: 1; min-height: 0; display: flex; gap: 16px; padding: 16px;
+            overflow: hidden;
+        }
+
+        .import-left {
+            width: 45%; min-width: 0;
+            display: flex; flex-direction: column; gap: 12px;
+            overflow-y: auto; overflow-x: hidden;
+        }
+
+        .import-right {
+            width: 55%; min-width: 0;
+            display: flex; flex-direction: column; gap: 0;
+            overflow: hidden;
+        }
+
+        .import-input-section {
+            flex-shrink: 0;
+        }
+        .import-input-section .form-group { margin-bottom: 10px; }
+        .import-input-section .form-label { margin-bottom: 4px; }
+
+        .dns-import-dropzone {
+            padding: 10px; border: 2px dashed var(--border-color);
+            border-radius: var(--radius); background: var(--bg-surface); color: var(--text-muted);
+            font-size: 13px; line-height: 1.6; transition: var(--transition); cursor: default;
+        }
+        .dns-import-dropzone.is-dragover { border-color: var(--accent-blue); background: rgba(137, 180, 250, 0.08); color: var(--accent-blue); }
+        .dns-import-dropzone-content { display: grid; grid-template-columns: 1.2fr 1fr; gap: 10px; align-items: stretch; }
+        .dns-import-dropzone-text { display: flex; flex-direction: column; justify-content: center; gap: 6px; text-align: left; padding: 2px 4px; }
+        .dns-import-dropzone-preview {
+            border: 1px solid var(--border-color); border-radius: 8px; height: 100px;
+            display: flex; align-items: center; justify-content: center; overflow: hidden; background: #11111b;
+        }
+        .dns-import-dropzone-preview img { max-width: 100%; max-height: 96px; object-fit: contain; display: none; }
+        .dns-import-dropzone.has-image .dns-import-dropzone-preview img { display: block; }
+        .dns-import-dropzone.has-image #dns-import-image-placeholder { display: none; }
+        #dns-import-image-placeholder { font-size: 12px; color: var(--text-muted); }
+
+        .import-input-actions {
+            display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center;
+            margin-top: 8px; flex-shrink: 0;
+        }
+
+        .import-log-section {
+            flex: 1; min-height: 0;
+            display: flex; flex-direction: column;
+            overflow: hidden;
+        }
+        .import-log-section.hidden { display: none; }
+        .import-log-section .section-label {
+            font-size: 13px; font-weight: 500; color: var(--text-secondary); margin-bottom: 6px; flex-shrink: 0;
+        }
+
+        .ai-log-output {
+            flex: 1; min-height: 60px; padding: 12px;
+            background: #11111b; border: 1px solid var(--border-color); border-radius: var(--radius);
+            color: var(--accent-green); font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+            font-size: 12px; line-height: 1.5; overflow-y: auto; white-space: pre-wrap; word-break: break-all;
+        }
+
+        .ai-config-status {
+            flex-shrink: 0;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 14px 16px;
+        }
+        .ai-config-status-title {
+            font-size: 13px; font-weight: 600; color: var(--text-primary);
+            margin: 0 0 10px 0; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);
+        }
+        .ai-config-status-row {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 6px 0; border-bottom: 1px solid var(--border-color);
+        }
+        .ai-config-status-row:last-child { border-bottom: none; }
+        .ai-config-status-label { font-size: 12px; color: var(--text-secondary); }
+        .ai-config-status-value { font-size: 12px; color: var(--text-primary); }
+        .ai-config-status-value.configured { color: var(--accent-green); }
+        .ai-config-status-value.not-configured { color: var(--accent-red); }
+
+        .import-right-placeholder {
+            flex: 1; min-height: 0;
+            display: flex; align-items: center; justify-content: center;
+            color: var(--text-muted); font-size: 14px;
+            border: 1px dashed var(--border-color); border-radius: var(--radius-lg);
+        }
+        .import-right-placeholder.hidden { display: none; }
+
+        .import-records-wrapper {
+            flex: 1; min-height: 0;
+            display: flex; flex-direction: column;
+            overflow: hidden;
+        }
+        .import-records-wrapper.hidden { display: none; }
+
+        .import-records-header {
+            flex-shrink: 0;
+            font-size: 13px; color: var(--text-secondary);
+            margin-bottom: 10px; padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .import-records-count { color: var(--accent-blue); font-weight: 600; }
+
+        .import-records-list {
+            flex: 1; min-height: 0; overflow-y: auto;
+            display: flex; flex-direction: column; gap: 10px;
+            padding-right: 4px;
+        }
+
+        .import-actions {
+            flex-shrink: 0;
+            padding-top: 12px; margin-top: 12px;
+            border-top: 1px solid var(--border-color);
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+        }
+        .import-skip-info { font-size: 12px; color: var(--text-muted); }
+
+        .dns-import-card { border: 1px solid var(--border-color); border-radius: var(--radius); padding: 10px 12px; background: var(--bg-base); transition: var(--transition); }
+        .dns-import-card.record-skipped { opacity: 0.5; }
+        .dns-import-card-header {
+            display: flex; align-items: center; gap: 10px;
+            margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);
+        }
+        .dns-import-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin-bottom: 8px; }
+        .dns-import-row:last-child { margin-bottom: 0; }
+        .dns-import-row-2 { grid-template-columns: minmax(100px, 1fr) minmax(160px, 2fr) 72px 32px; align-items: end; }
+        .dns-import-field label { display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 3px; }
+        .dns-import-field .form-input, .dns-import-field .form-select { width: 100%; padding: 5px 7px; font-size: 12px; box-sizing: border-box; }
+        .dns-import-field-action { display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; }
+
+        .skip-checkbox {
+            display: inline-flex; align-items: center; gap: 4px;
+            font-size: 12px; color: var(--text-secondary); cursor: pointer; user-select: none;
+        }
+        .skip-checkbox input[type="checkbox"] { accent-color: var(--accent-blue); cursor: pointer; }
+
+        .status-badge {
+            display: inline-block; padding: 2px 8px; border-radius: 4px;
+            font-size: 11px; font-weight: 600; line-height: 1.4;
+        }
+        .status-badge.status-exists { background: rgba(166, 227, 161, 0.15); color: var(--accent-green); }
+        .status-badge.status-conflict { background: rgba(249, 226, 175, 0.15); color: var(--accent-yellow); }
+        .status-badge.status-new { background: rgba(137, 180, 250, 0.15); color: var(--accent-blue); }
+
+        @media (max-width: 767px) {
+            .app-header { padding: 0 16px; }
+            .import-split { flex-direction: column; padding: 12px; gap: 12px; overflow-y: auto; }
+            .import-left, .import-right { width: 100%; overflow-y: visible; flex-shrink: 0; }
+            .import-log-section { flex: 0 0 auto; min-height: 80px; }
+            .import-records-list { flex: 0 0 auto; max-height: 50vh; overflow-y: auto; }
+            .import-right { flex: 1; min-height: 0; overflow: visible; }
+            .import-records-wrapper { overflow: visible; }
+        }
+    </style>
+</head>
+<body>
+    <header class="app-header">
+        <div class="app-title">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            DNS 解析管理
+        </div>
+        <div class="header-tabs">
+            <div class="tab-item active" data-tab="dns" onclick="switchTab('dns')">DNS 解析</div>
+            <div class="tab-item" data-tab="import" onclick="switchTab('import')">快速导入</div>
+        </div>
+    </header>
+
+    <div class="app-body">
+        <!-- DNS 解析面板 -->
+        <div class="tab-panel active" id="tab-dns">
+            <div class="dns-tab-scroll">
+                <div class="dns-providers" id="dns-providers">
+                    <div class="dns-provider-card" data-provider="ali" onclick="selectProvider('ali')">
+                        <div class="dns-provider-name">阿里云 DNS</div>
+                        <div class="dns-provider-status" id="dns-status-ali">未配置</div>
+                    </div>
+                    <div class="dns-provider-card" data-provider="dnspod" onclick="selectProvider('dnspod')">
+                        <div class="dns-provider-name">DNSPod</div>
+                        <div class="dns-provider-status" id="dns-status-dnspod">未配置</div>
+                    </div>
+                    <div class="dns-provider-card" data-provider="tencent" onclick="selectProvider('tencent')">
+                        <div class="dns-provider-name">腾讯云</div>
+                        <div class="dns-provider-status" id="dns-status-tencent">未配置</div>
+                    </div>
+                </div>
+                <div class="dns-domain-section" id="dns-domain-section" style="display:none">
+                    <div class="dns-domain-header">
+                        <span style="font-size:14px;font-weight:500;color:var(--text-primary)">选择域名</span>
+                        <button class="btn btn-ghost btn-sm" onclick="loadDomains()">
+                            <svg viewBox="0 0 24 24" width="14" height="14"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                            刷新
+                        </button>
+                    </div>
+                    <div class="dns-domain-list" id="dns-domain-list"></div>
+                </div>
+                <div class="dns-records-section" id="dns-records-section" style="display:none">
+                    <div class="dns-records-header">
+                        <div class="dns-records-search">
+                            <span style="font-size:14px;font-weight:500;color:var(--text-primary);white-space:nowrap" id="dns-current-domain"></span>
+                            <input type="text" id="dns-records-search-input" placeholder="搜索类型/主机记录/记录值..." oninput="filterRecords()">
+                        </div>
+                        <div style="display:flex;gap:8px">
+                            <button class="btn btn-primary btn-sm" onclick="openAddRecord()">+ 添加记录</button>
+                            <button class="btn btn-ghost btn-sm" onclick="loadRecords()">刷新</button>
+                        </div>
+                    </div>
+                    <div class="dns-records-table-wrap">
+                        <table class="dns-records-table">
+                            <thead><tr><th>类型</th><th>主机记录</th><th>记录值</th><th>TTL</th><th>线路</th><th>操作</th></tr></thead>
+                            <tbody id="dns-records-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="dns-records-pagination" id="dns-records-pagination" style="display:none">
+                        <div class="dns-records-page-info" id="dns-records-page-info"></div>
+                        <div class="dns-records-page-actions">
+                            <button class="btn btn-ghost btn-sm" onclick="prevPage()">上一页</button>
+                            <button class="btn btn-ghost btn-sm" onclick="nextPage()">下一页</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 快速导入面板 -->
+        <div class="tab-panel" id="tab-import">
+            <div class="import-split">
+                <div class="import-left">
+                    <div class="import-input-section">
+                        <div class="form-group">
+                            <label class="form-label">粘贴记录文本或截图（Ctrl+V / 拖拽）</label>
+                            <textarea class="form-input" id="dns-import-text" rows="4" placeholder="直接粘贴阿里云/腾讯云表格文字（含校验域名、主机记录、记录类型、记录值），或粘贴 JSON；截图可拖到下方"></textarea>
+                        </div>
+                        <div class="dns-import-dropzone" id="dns-import-dropzone">
+                            <div class="dns-import-dropzone-content">
+                                <div class="dns-import-dropzone-text">
+                                    <div>左侧粘贴文字，右侧放截图</div>
+                                    <div style="font-size:12px;opacity:0.85">支持 PNG / JPG / WEBP / GIF</div>
+                                </div>
+                                <div class="dns-import-dropzone-preview">
+                                    <img id="dns-import-image-preview" alt="待识别截图">
+                                    <span id="dns-import-image-placeholder">未附加图片</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="import-input-actions">
+                            <div style="display:flex;flex-wrap:wrap;gap:8px">
+                                <button type="button" class="btn btn-ghost btn-sm" id="btn-dns-import-pick-image">选择图片</button>
+                                <button type="button" class="btn btn-ghost btn-sm" id="btn-dns-import-clear-image">移除图片</button>
+                            </div>
+                            <button type="button" class="btn btn-primary btn-sm" id="btn-dns-import-parse" onclick="startAiParse()">AI 解析并预览</button>
+                        </div>
+                        <input type="file" id="dns-import-file-input" accept="image/*" style="display:none">
+                    </div>
+
+                    <div class="import-log-section hidden" id="dns-import-log-section">
+                        <div class="section-label">识别日志</div>
+                        <div class="ai-log-output" id="dns-import-log-output"></div>
+                    </div>
+
+                    <div class="ai-config-status">
+                        <h2 class="ai-config-status-title">AI 解析配置</h2>
+                        <div class="ai-config-status-row">
+                            <span class="ai-config-status-label">API 状态</span>
+                            <span class="ai-config-status-value" id="ai-config-api-status">加载中...</span>
+                        </div>
+                        <div class="ai-config-status-row">
+                            <span class="ai-config-status-label">模型</span>
+                            <span class="ai-config-status-value" id="ai-config-model">-</span>
+                        </div>
+                        <div class="ai-config-status-row">
+                            <span class="ai-config-status-label">AI 解析</span>
+                            <span class="ai-config-status-value" id="ai-config-enabled">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="import-right">
+                    <div class="import-right-placeholder" id="import-right-placeholder">
+                        解析后的记录将显示在此处
+                    </div>
+                    <div class="import-records-wrapper hidden" id="import-records-wrapper">
+                        <div class="import-records-header">
+                            <span>共解析到 <span class="import-records-count" id="dns-import-count">0</span> 条记录</span>
+                            <span id="import-skip-info" class="import-skip-info"></span>
+                        </div>
+                        <div class="import-records-list" id="dns-import-preview-list"></div>
+                        <div class="import-actions">
+                            <span id="import-action-info" class="import-skip-info"></span>
+                            <div style="display:flex;gap:8px;">
+                                <button class="btn btn-ghost" onclick="cancelImport()">取消</button>
+                                <button class="btn btn-primary" onclick="confirmImport()">确认导入</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- DNS 记录模态框 -->
+    <div class="modal-overlay" id="dns-record-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="modal-title" id="dns-modal-title">添加记录</span>
+                <button class="modal-close" onclick="closeDnsModal()"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="dns-edit-record-id">
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">记录类型 *</label><select class="form-input" id="dns-field-type" onchange="onTypeChange()">
+                        <option value="A">A - IPv4</option><option value="AAAA">AAAA - IPv6</option><option value="CNAME">CNAME</option><option value="MX">MX</option><option value="TXT">TXT</option><option value="NS">NS</option><option value="SRV">SRV</option><option value="CAA">CAA</option>
+                    </select></div>
+                    <div class="form-group"><label class="form-label">主机记录 *</label><input type="text" class="form-input" id="dns-field-rr" placeholder="www 或 @"></div>
+                </div>
+                <div class="form-group"><label class="form-label">记录值 *</label><input type="text" class="form-input" id="dns-field-value" placeholder="1.2.3.4 或 example.com"></div>
+                <div class="form-group" id="dns-mx-priority-group" style="display:none"><label class="form-label">MX 优先级</label><input type="number" class="form-input" id="dns-field-mx-priority" value="10"></div>
+                <div id="dns-srv-fields" style="display:none"><div class="form-row">
+                    <div class="form-group"><label class="form-label">优先级</label><input type="number" class="form-input" id="dns-field-srv-priority" value="10"></div>
+                    <div class="form-group"><label class="form-label">权重</label><input type="number" class="form-input" id="dns-field-srv-weight" value="5"></div>
+                    <div class="form-group"><label class="form-label">端口</label><input type="number" class="form-input" id="dns-field-srv-port" value="443"></div>
+                </div></div>
+                <div id="dns-caa-fields" style="display:none"><div class="form-row">
+                    <div class="form-group"><label class="form-label">CAA 标志</label><select class="form-input" id="dns-field-caa-flags"><option value="0">0</option><option value="128">128</option></select></div>
+                    <div class="form-group"><label class="form-label">CAA 标签</label><select class="form-input" id="dns-field-caa-tag"><option value="issue">issue</option><option value="issuewild">issuewild</option><option value="iodef">iodef</option></select></div>
+                </div></div>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">TTL</label><select class="form-input" id="dns-field-ttl"><option value="60">60s</option><option value="300">300s</option><option value="600" selected>600s</option><option value="1800">1800s</option><option value="3600">3600s</option></select></div>
+                    <div class="form-group"><label class="form-label">线路</label><select class="form-input" id="dns-field-line"><option value="default">默认</option><option value="telecom">电信</option><option value="unicom">联通</option><option value="mobile">移动</option><option value="overseas">海外</option></select></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="closeDnsModal()">取消</button>
+                <button class="btn btn-primary" onclick="saveDnsRecord()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toast-container"></div>
+
+    <script>
+    var currentProvider = '';
+    var currentDomain = '';
+    var currentDomainId = '';
+    var currentPage = 1;
+    var pageSize = 50;
+    var pagination = { page: 1, page_size: 50, total: 0, total_pages: 1 };
+    var allRecords = [];
+    var filteredRecords = [];
+    var importImageBase64 = '';
+    var aiParseRunId = '';
+    var aiPollTimer = null;
+    var aiParsedRecords = [];
+
+    function showToast(msg, type) {
+        type = type || 'info';
+        var c = document.getElementById('toast-container'); if (!c) return;
+        var t = document.createElement('div'); t.className = 'toast toast-' + type; t.textContent = msg; c.appendChild(t);
+        requestAnimationFrame(function () { t.classList.add('toast-show'); });
+        setTimeout(function () { t.classList.remove('toast-show'); t.classList.add('toast-hide'); t.addEventListener('transitionend', function () { if (t.parentNode) t.parentNode.removeChild(t); }); }, 3000);
+    }
+
+    function api(method, url, body) {
+        var opts = { method: method, headers: { 'Content-Type': 'application/json' } };
+        if (body !== undefined) opts.body = JSON.stringify(body);
+        return fetch(url, opts).then(function (r) { return r.json(); });
+    }
+
+    function escHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+    function switchTab(tab) {
+        document.querySelectorAll('.tab-item').forEach(function (el) { el.classList.toggle('active', el.dataset.tab === tab); });
+        document.querySelectorAll('.tab-panel').forEach(function (el) { el.classList.toggle('active', el.id === 'tab-' + tab); });
+        if (tab === 'import') loadAiConfig();
+    }
+
+    // ==================== 服务商 ====================
+    function loadProviders() {
+        api('GET', '/api/dns/providers').then(function (res) {
+            if (!res.success) return;
+            var data = res.data || {};
+            ['ali', 'dnspod', 'tencent'].forEach(function (p) {
+                var el = document.getElementById('dns-status-' + p);
+                if (el) { el.textContent = data[p] ? '已配置' : '未配置'; el.className = 'dns-provider-status' + (data[p] ? ' configured' : ''); }
+                var card = document.querySelector('.dns-provider-card[data-provider="' + p + '"]');
+                if (card) { card.classList.toggle('active', currentProvider === p); card.style.opacity = data[p] ? '1' : '0.5'; }
+            });
+        });
+    }
+
+    function selectProvider(provider) {
+        currentProvider = provider; currentDomain = ''; currentPage = 1;
+        document.querySelectorAll('.dns-provider-card').forEach(function (el) { el.classList.toggle('active', el.dataset.provider === provider); });
+        document.getElementById('dns-domain-section').style.display = 'block';
+        document.getElementById('dns-records-section').style.display = 'none';
+        loadDomains();
+    }
+
+    // ==================== 域名 ====================
+    function loadDomains() {
+        if (!currentProvider) return;
+        var el = document.getElementById('dns-domain-list');
+        el.innerHTML = '<div class="center-loading"><span class="loading-spinner"></span> 加载中...</div>';
+        api('GET', '/api/dns/domains/' + currentProvider).then(function (res) {
+            if (!res.success) { el.innerHTML = '<span style="color:var(--accent-red);font-size:13px">' + escHtml(res.message) + '</span>'; return; }
+            var domains = res.data || [];
+            if (!domains.length) { el.innerHTML = '<span style="font-size:12px;color:var(--text-muted)">暂无域名</span>'; return; }
+            el.innerHTML = '';
+            domains.forEach(function (d) {
+                var tag = document.createElement('div');
+                tag.className = 'dns-domain-tag' + (currentDomain === d.DomainName ? ' active' : '');
+                tag.textContent = d.DomainName; tag.dataset.domain = d.DomainName; tag.dataset.domainId = d.DomainId || '';
+                tag.onclick = function () { selectDomain(d.DomainName, d.DomainId || ''); };
+                el.appendChild(tag);
+            });
+        });
+    }
+
+    function selectDomain(domain, domainId) {
+        currentDomain = domain; currentDomainId = domainId || ''; currentPage = 1;
+        document.querySelectorAll('.dns-domain-tag').forEach(function (el) { el.classList.toggle('active', el.dataset.domain === domain); });
+        document.getElementById('dns-records-section').style.display = 'block';
+        document.getElementById('dns-current-domain').textContent = domain;
+        loadRecords();
+    }
+
+    // ==================== 记录 ====================
+    function loadRecords() {
+        if (!currentProvider || !currentDomain) return;
+        var tbody = document.getElementById('dns-records-body');
+        tbody.innerHTML = '<tr><td colspan="6"><div class="center-loading"><span class="loading-spinner"></span> 加载中...</div></td></tr>';
+        var url = '/api/dns/records/' + currentProvider + '?domain=' + encodeURIComponent(currentDomain) + '&page=' + currentPage + '&page_size=' + pageSize;
+        if (currentDomainId) url += '&zone_id=' + encodeURIComponent(currentDomainId);
+        api('GET', url).then(function (res) {
+            if (!res.success) { tbody.innerHTML = '<tr><td colspan="6" style="color:var(--accent-red)">' + escHtml(res.message) + '</td></tr>'; return; }
+            var data = res.data || {}; allRecords = data.records || [];
+            filteredRecords = allRecords.slice();
+            document.getElementById('dns-records-search-input').value = '';
+            pagination = data.pagination || { page: 1, page_size: 50, total: 0, total_pages: 1 };
+            renderRecords();
+        });
+    }
+
+    function renderRecords() {
+        var tbody = document.getElementById('dns-records-body');
+        if (!filteredRecords.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted)">' + (allRecords.length ? '无匹配记录' : '暂无解析记录') + '</td></tr>'; document.getElementById('dns-records-pagination').style.display = 'none'; return; }
+        tbody.innerHTML = '';
+        filteredRecords.forEach(function (r) {
+            var tr = document.createElement('tr');
+            var ttlD = (r.TTL === 1 || r.TTL === '1') ? 'Auto' : r.TTL;
+            var lineD = r.Line || '默认';
+            if (lineD === 'proxied') lineD = '代理'; else if (lineD === 'dns_only') lineD = '仅DNS';
+            tr.innerHTML = '<td><span class="dns-type-badge">' + escHtml(r.Type || '') + '</span></td><td>' + escHtml(r.RR || '@') + '</td><td title="' + escHtml(r.Value || '') + '">' + escHtml(r.Value || '') + '</td><td>' + ttlD + '</td><td>' + escHtml(lineD) + '</td><td><div class="dns-actions"><button class="btn btn-ghost btn-sm" onclick=\'editRecord(' + JSON.stringify(JSON.stringify(r)) + ')\'>编辑</button><button class="btn btn-danger btn-sm" onclick="deleteRecord(\'' + escHtml(r.RecordId || '') + '\')">删除</button></div></td>';
+            tbody.appendChild(tr);
+        });
+        var pagEl = document.getElementById('dns-records-pagination');
+        if (pagination.total_pages > 1) { pagEl.style.display = 'flex'; document.getElementById('dns-records-page-info').textContent = '第 ' + pagination.page + ' / ' + pagination.total_pages + ' 页，共 ' + pagination.total + ' 条'; }
+        else pagEl.style.display = 'none';
+    }
+
+    function filterRecords() {
+        var keyword = (document.getElementById('dns-records-search-input').value || '').trim().toLowerCase();
+        if (!keyword) {
+            filteredRecords = allRecords.slice();
+        } else {
+            filteredRecords = allRecords.filter(function (r) {
+                return (r.Type || '').toLowerCase().indexOf(keyword) !== -1 ||
+                       (r.RR || '@').toLowerCase().indexOf(keyword) !== -1 ||
+                       (r.Value || '').toLowerCase().indexOf(keyword) !== -1;
+            });
+        }
+        renderRecords();
+    }
+
+    function prevPage() { if (currentPage > 1) { currentPage--; loadRecords(); } }
+    function nextPage() { if (currentPage < pagination.total_pages) { currentPage++; loadRecords(); } }
+
+    function onTypeChange() {
+        var t = document.getElementById('dns-field-type').value;
+        document.getElementById('dns-mx-priority-group').style.display = t === 'MX' ? 'block' : 'none';
+        document.getElementById('dns-srv-fields').style.display = t === 'SRV' ? 'block' : 'none';
+        document.getElementById('dns-caa-fields').style.display = t === 'CAA' ? 'block' : 'none';
+    }
+
+    function openAddRecord() {
+        document.getElementById('dns-modal-title').textContent = '添加记录';
+        document.getElementById('dns-edit-record-id').value = '';
+        document.getElementById('dns-field-type').value = 'A'; document.getElementById('dns-field-rr').value = '';
+        document.getElementById('dns-field-value').value = ''; document.getElementById('dns-field-ttl').value = '600';
+        document.getElementById('dns-field-line').value = 'default'; onTypeChange();
+        document.getElementById('dns-record-modal').classList.add('modal-active');
+    }
+
+    function editRecord(recordJson) {
+        var r = JSON.parse(recordJson);
+        document.getElementById('dns-modal-title').textContent = '编辑记录';
+        document.getElementById('dns-edit-record-id').value = r.RecordId || '';
+        document.getElementById('dns-field-type').value = r.Type || 'A'; document.getElementById('dns-field-rr').value = r.RR || '';
+        document.getElementById('dns-field-value').value = r.Value || ''; document.getElementById('dns-field-ttl').value = String(r.TTL || 600);
+        document.getElementById('dns-field-line').value = r.Line || 'default'; onTypeChange();
+        document.getElementById('dns-record-modal').classList.add('modal-active');
+    }
+
+    function closeDnsModal() { document.getElementById('dns-record-modal').classList.remove('modal-active'); }
+
+    function saveDnsRecord() {
+        var rid = document.getElementById('dns-edit-record-id').value;
+        var type = document.getElementById('dns-field-type').value, rr = document.getElementById('dns-field-rr').value.trim(), value = document.getElementById('dns-field-value').value.trim();
+        var ttl = parseInt(document.getElementById('dns-field-ttl').value) || 600, line = document.getElementById('dns-field-line').value;
+        if (!rr || !value) { showToast('主机记录和记录值不能为空', 'error'); return; }
+        var params = { type: type, rr: rr, value: value, ttl: ttl, line: line, domain: currentDomain, zone_id: currentDomainId };
+        if (type === 'MX') params.mx_priority = parseInt(document.getElementById('dns-field-mx-priority').value) || 10;
+        if (type === 'SRV') { params.srv_priority = parseInt(document.getElementById('dns-field-srv-priority').value) || 10; params.srv_weight = parseInt(document.getElementById('dns-field-srv-weight').value) || 5; params.srv_port = parseInt(document.getElementById('dns-field-srv-port').value) || 443; }
+        if (type === 'CAA') { params.caa_flags = parseInt(document.getElementById('dns-field-caa-flags').value) || 0; params.caa_tag = document.getElementById('dns-field-caa-tag').value || 'issue'; }
+        if (rid) params.record_id = rid;
+        api(rid ? 'PUT' : 'POST', '/api/dns/records/' + currentProvider, params).then(function (res) {
+            if (res.success) { showToast(rid ? '记录已更新' : '记录已添加', 'success'); closeDnsModal(); loadRecords(); }
+            else showToast(res.message || '操作失败', 'error');
+        });
+    }
+
+    function deleteRecord(recordId) {
+        if (!confirm('确定要删除这条记录吗？')) return;
+        api('DELETE', '/api/dns/records/' + currentProvider, { record_id: recordId, domain: currentDomain }).then(function (res) {
+            if (res.success) { showToast('记录已删除', 'success'); loadRecords(); } else showToast(res.message || '删除失败', 'error');
+        });
+    }
+
+    // ==================== AI 解析 ====================
+    function loadAiConfig() {
+        api('GET', '/api/dns/ai/config').then(function (res) {
+            if (!res.success) return;
+            var cfg = res.data || {};
+
+            var statusEl = document.getElementById('ai-config-api-status');
+            var modelEl = document.getElementById('ai-config-model');
+            var enabledEl = document.getElementById('ai-config-enabled');
+
+            if (cfg.has_api_key) {
+                statusEl.textContent = '已配置';
+                statusEl.className = 'ai-config-status-value configured';
+            } else {
+                statusEl.textContent = '未配置';
+                statusEl.className = 'ai-config-status-value not-configured';
+            }
+
+            modelEl.textContent = cfg.effective_model_label || cfg.cursor_model || '-';
+
+            if (cfg.enabled === false) {
+                enabledEl.textContent = '已禁用';
+                enabledEl.className = 'ai-config-status-value not-configured';
+            } else {
+                enabledEl.textContent = '已启用';
+                enabledEl.className = 'ai-config-status-value configured';
+            }
+        });
+    }
+
+    function startAiParse() {
+        var text = document.getElementById('dns-import-text').value.trim();
+        if (!text && !importImageBase64) { showToast('请粘贴文本或图片后再识别', 'error'); return; }
+        document.getElementById('btn-dns-import-parse').disabled = true;
+        var logSection = document.getElementById('dns-import-log-section');
+        logSection.classList.remove('hidden');
+        document.getElementById('dns-import-log-output').textContent = '正在启动识别...\n';
+        document.getElementById('import-right-placeholder').classList.remove('hidden');
+        document.getElementById('import-records-wrapper').classList.add('hidden');
+        aiParsedRecords = [];
+
+        api('POST', '/api/dns/ai/parse', { text: text, image_base64: importImageBase64, domain_hint: currentDomain || '' }).then(function (res) {
+            document.getElementById('btn-dns-import-parse').disabled = false;
+            if (!res.success) { document.getElementById('dns-import-log-output').textContent += '[ERROR] ' + (res.message || '启动失败') + '\n'; return; }
+            aiParseRunId = res.data.run_id;
+            pollAiParse();
+        }).catch(function (e) {
+            document.getElementById('btn-dns-import-parse').disabled = false;
+            document.getElementById('dns-import-log-output').textContent += '[ERROR] ' + e.message + '\n';
+        });
+    }
+
+    var aiPollSeq = 0;
+    function pollAiParse() {
+        if (!aiParseRunId) return;
+        if (aiPollTimer) clearTimeout(aiPollTimer);
+        api('GET', '/api/dns/ai/parse/' + aiParseRunId + '?since_seq=' + aiPollSeq + '&limit=200').then(function (res) {
+            if (!res.success) { aiPollTimer = setTimeout(pollAiParse, 1500); return; }
+            var data = res.data || {};
+            var lines = data.lines || [];
+            if (lines.length) {
+                var logEl = document.getElementById('dns-import-log-output');
+                lines.forEach(function (l) { logEl.textContent += l; });
+                logEl.scrollTop = logEl.scrollHeight;
+            }
+            aiPollSeq = data.next_seq || aiPollSeq;
+            if (data.done) {
+                if (data.records && data.records.length) {
+                    aiParsedRecords = data.records;
+                    checkRecordsExistence();
+                } else {
+                    showToast(data.message || '未能解析出记录', 'error');
+                }
+                return;
+            }
+            aiPollTimer = setTimeout(pollAiParse, 1200);
+        });
+    }
+
+    function checkRecordsExistence() {
+        aiParsedRecords.forEach(function (rec) {
+            if (!rec._status) rec._status = 'new';
+            if (rec._status === 'exists' && rec._skip === undefined) rec._skip = true;
+        });
+
+        document.getElementById('import-right-placeholder').classList.add('hidden');
+        document.getElementById('import-records-wrapper').classList.remove('hidden');
+        document.getElementById('dns-import-count').textContent = aiParsedRecords.length;
+
+        if (!currentProvider) {
+            var logEl = document.getElementById('dns-import-log-output');
+            if (logEl) { logEl.textContent += '\n[CHECK] 未选择服务商，跳过存在性检测\n'; logEl.scrollTop = logEl.scrollHeight; }
+            renderImportPreview();
+            return;
+        }
+
+        var checkPayload = {
+            records: aiParsedRecords.map(function (r) {
+                return { type: r.type, rr: r.rr, value: r.value, domain: r.domain || currentDomain };
+            }),
+            domain: currentDomain
+        };
+
+        api('POST', '/api/dns/records-check/' + currentProvider, checkPayload).then(function (res) {
+            if (res.success && res.data) {
+                var checks = res.data.checks || res.data.results || res.data;
+                if (Array.isArray(checks)) {
+                    checks.forEach(function (c, idx) {
+                        if (aiParsedRecords[idx]) {
+                            aiParsedRecords[idx]._status = c.status || 'new';
+                            if (c.status === 'exists') aiParsedRecords[idx]._skip = true;
+                        }
+                    });
+                }
+            }
+            aiParsedRecords.forEach(function (rec) {
+                if (!rec._status) rec._status = 'new';
+            });
+            appendExistenceLog();
+            renderImportPreview();
+        }).catch(function () {
+            aiParsedRecords.forEach(function (rec) { rec._status = rec._status || 'new'; });
+            renderImportPreview();
+        });
+    }
+
+    var statusLabels = { exists: '已存在', conflict: '冲突', 'new': '新增' };
+
+    function appendExistenceLog() {
+        var logEl = document.getElementById('dns-import-log-output');
+        if (!logEl || !aiParsedRecords.length) return;
+        var newCount = 0, existsCount = 0, conflictCount = 0;
+        var conflictDetails = [];
+        aiParsedRecords.forEach(function (rec, idx) {
+            var s = rec._status || 'new';
+            if (s === 'new') newCount++;
+            else if (s === 'exists') existsCount++;
+            else if (s === 'conflict') {
+                conflictCount++;
+                conflictDetails.push('  #' + (idx + 1) + ' ' + rec.type + ' ' + (rec.rr || '@') + '.' + (rec.domain || '') + ' → 值不同');
+            }
+        });
+        var lines = '\n[CHECK] 存在性检测完成：新增 ' + newCount + ' 条，已存在 ' + existsCount + ' 条，冲突 ' + conflictCount + ' 条\n';
+        if (conflictDetails.length) {
+            lines += '[CHECK] 冲突详情（同类型同主机记录已存在，值不同）：\n';
+            conflictDetails.forEach(function (d) { lines += d + '\n'; });
+        }
+        logEl.textContent += lines;
+        logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function renderImportPreview() {
+        document.getElementById('import-right-placeholder').classList.add('hidden');
+        document.getElementById('import-records-wrapper').classList.remove('hidden');
+        document.getElementById('dns-import-count').textContent = aiParsedRecords.length;
+
+        var skipCount = aiParsedRecords.filter(function (r) { return r._skip; }).length;
+        var importCount = aiParsedRecords.length - skipCount;
+        var skipInfo = skipCount > 0 ? '将跳过 ' + skipCount + ' 条已存在记录' : '';
+        document.getElementById('import-skip-info').textContent = skipInfo;
+        document.getElementById('import-action-info').textContent = importCount > 0 ? '将导入 ' + importCount + ' 条记录' : '没有需要导入的记录';
+
+        var list = document.getElementById('dns-import-preview-list');
+        list.innerHTML = '';
+        aiParsedRecords.forEach(function (rec, idx) {
+            var status = rec._status || 'new';
+            var skipped = !!rec._skip;
+            var card = document.createElement('div');
+            card.className = 'dns-import-card' + (skipped ? ' record-skipped' : '');
+            card.dataset.idx = idx;
+            card.innerHTML =
+                '<div class="dns-import-card-header">' +
+                    '<label class="skip-checkbox"><input type="checkbox" data-idx="' + idx + '" data-field="skip"' + (skipped ? ' checked' : '') + ' onchange="toggleSkipRecord(' + idx + ', this.checked)"> 跳过</label>' +
+                    '<span class="status-badge status-' + status + '">' + (statusLabels[status] || status) + '</span>' +
+                '</div>' +
+                '<div class="dns-import-row">' +
+                    '<div class="dns-import-field"><label>类型</label><select class="form-select" data-idx="' + idx + '" data-field="type">' +
+                        ['A','AAAA','CNAME','MX','TXT','NS','SRV','CAA'].map(function(t) { return '<option value="' + t + '"' + (rec.type === t ? ' selected' : '') + '>' + t + '</option>'; }).join('') +
+                    '</select></div>' +
+                    '<div class="dns-import-field"><label>主机记录</label><input class="form-input" data-idx="' + idx + '" data-field="rr" value="' + escHtml(rec.rr || '@') + '"></div>' +
+                '</div>' +
+                '<div class="dns-import-row dns-import-row-2">' +
+                    '<div class="dns-import-field"><label>域名</label><input class="form-input" data-idx="' + idx + '" data-field="domain" value="' + escHtml(rec.domain || '') + '"></div>' +
+                    '<div class="dns-import-field"><label>记录值</label><input class="form-input" data-idx="' + idx + '" data-field="value" value="' + escHtml(rec.value || '') + '"></div>' +
+                    '<div class="dns-import-field"><label>TTL</label><input class="form-input" data-idx="' + idx + '" data-field="ttl" value="' + (rec.ttl || 600) + '" type="number"></div>' +
+                    '<div class="dns-import-field-action"><button class="btn btn-danger btn-sm" onclick="removeImportRecord(' + idx + ')">✕</button></div>' +
+                '</div>';
+            list.appendChild(card);
+        });
+    }
+
+    function toggleSkipRecord(idx, skipped) {
+        aiParsedRecords[idx]._skip = skipped;
+        var card = document.querySelectorAll('.dns-import-card')[idx];
+        if (card) card.classList.toggle('record-skipped', skipped);
+
+        var skipCount = aiParsedRecords.filter(function (r) { return r._skip; }).length;
+        var importCount = aiParsedRecords.length - skipCount;
+        document.getElementById('import-skip-info').textContent = skipCount > 0 ? '将跳过 ' + skipCount + ' 条已存在记录' : '';
+        document.getElementById('import-action-info').textContent = importCount > 0 ? '将导入 ' + importCount + ' 条记录' : '没有需要导入的记录';
+    }
+
+    function removeImportRecord(idx) {
+        syncImportEdits();
+        aiParsedRecords.splice(idx, 1);
+        renderImportPreview();
+    }
+
+    function syncImportEdits() {
+        document.querySelectorAll('#dns-import-preview-list [data-idx]').forEach(function (el) {
+            var idx = parseInt(el.dataset.idx), field = el.dataset.field;
+            if (field === 'skip') {
+                if (aiParsedRecords[idx]) aiParsedRecords[idx]._skip = el.checked;
+                return;
+            }
+            if (aiParsedRecords[idx]) aiParsedRecords[idx][field] = el.value;
+        });
+    }
+
+    function cancelImport() {
+        document.getElementById('import-records-wrapper').classList.add('hidden');
+        document.getElementById('import-right-placeholder').classList.remove('hidden');
+        aiParsedRecords = [];
+    }
+
+    function confirmImport() {
+        syncImportEdits();
+        var recordsToImport = aiParsedRecords.filter(function (rec) { return !rec._skip; });
+        if (!recordsToImport.length) { showToast('没有可导入的记录', 'error'); return; }
+        if (!currentProvider || !currentDomain) { showToast('请先在 DNS 解析页选择服务商和域名', 'error'); return; }
+        var promises = recordsToImport.map(function (rec) {
+            return api('POST', '/api/dns/records/' + currentProvider, {
+                type: rec.type, rr: rec.rr, value: rec.value, ttl: rec.ttl || 600,
+                line: 'default', domain: rec.domain || currentDomain,
+            }).catch(function () { return { success: false, message: '网络错误' }; });
+        });
+        Promise.all(promises).then(function (results) {
+            var ok = 0, fail = 0;
+            results.forEach(function (r) { if (r.success) ok++; else fail++; });
+            showToast('导入完成：成功 ' + ok + ' 条' + (fail ? '，失败 ' + fail + ' 条' : ''), fail ? 'error' : 'success');
+            document.getElementById('import-records-wrapper').classList.add('hidden');
+            document.getElementById('import-right-placeholder').classList.remove('hidden');
+            aiParsedRecords = [];
+            if (ok > 0) loadRecords();
+        });
+    }
+
+    // ==================== 图片拖拽/粘贴 ====================
+    (function initImageDrop() {
+        var dropzone = document.getElementById('dns-import-dropzone');
+        var preview = document.getElementById('dns-import-image-preview');
+        var fileInput = document.getElementById('dns-import-file-input');
+
+        function setImage(dataUrl) {
+            importImageBase64 = dataUrl;
+            preview.src = dataUrl;
+            dropzone.classList.add('has-image');
+        }
+
+        function clearImage() {
+            importImageBase64 = '';
+            preview.src = '';
+            dropzone.classList.remove('has-image');
+        }
+
+        dropzone.addEventListener('dragover', function (e) { e.preventDefault(); dropzone.classList.add('is-dragover'); });
+        dropzone.addEventListener('dragleave', function () { dropzone.classList.remove('is-dragover'); });
+        dropzone.addEventListener('drop', function (e) {
+            e.preventDefault(); dropzone.classList.remove('is-dragover');
+            var file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) { var reader = new FileReader(); reader.onload = function (ev) { setImage(ev.target.result); }; reader.readAsDataURL(file); }
+        });
+
+        document.addEventListener('paste', function (e) {
+            var items = e.clipboardData && e.clipboardData.items;
+            if (!items) return;
+            for (var i = 0; i < items.length; i++) {
+                if (items[i].type.startsWith('image/')) {
+                    var blob = items[i].getAsFile(); var reader = new FileReader();
+                    reader.onload = function (ev) { setImage(ev.target.result); }; reader.readAsDataURL(blob);
+                    break;
+                }
+            }
+        });
+
+        document.getElementById('btn-dns-import-pick-image').addEventListener('click', function () { fileInput.click(); });
+        fileInput.addEventListener('change', function () {
+            if (fileInput.files[0]) { var reader = new FileReader(); reader.onload = function (ev) { setImage(ev.target.result); }; reader.readAsDataURL(fileInput.files[0]); }
+        });
+        document.getElementById('btn-dns-import-clear-image').addEventListener('click', clearImage);
+    })();
+
+    // ==================== 初始化 ====================
+    loadProviders();
+    </script>
+</body>
+</html>

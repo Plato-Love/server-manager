@@ -90,8 +90,80 @@ def _normalize_record_type(raw: str) -> str:
     return s if s in _DNS_TYPES else ''
 
 
+def _parse_key_value_text(text: str) -> list[dict]:
+    """解析 SSL 验证页等键值对格式：主机记录/记录类型/记录值 各占一行。"""
+    out: list[dict] = []
+    kv_map: dict[str, str] = {}
+    key_aliases = {
+        '主机记录': 'rr', '记录名': 'rr', '名称': 'rr', 'host': 'rr',
+        '记录类型': 'type', '类型': 'type', 'type': 'type',
+        '记录值': 'value', 'txt记录值': 'value', 'a记录值': 'value', 'cname记录值': 'value', '值': 'value', 'value': 'value',
+        'ttl': 'ttl', 'TTL': 'ttl',
+        '线路': 'line', '解析线路': 'line',
+        '校验域名': 'domain', '域名': 'domain',
+    }
+    lines = (text or '').splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        if not line:
+            i += 1
+            continue
+        matched_key = None
+        for cn_key, field in key_aliases.items():
+            if line == cn_key or line.rstrip('：:') == cn_key:
+                matched_key = field
+                break
+        if matched_key:
+            val_lines = []
+            j = i + 1
+            while j < len(lines):
+                nxt = lines[j].strip()
+                if not nxt:
+                    j += 1
+                    continue
+                is_key = any(nxt == k or nxt.rstrip('：:') == k for k in key_aliases)
+                if is_key:
+                    break
+                val_lines.append(nxt)
+                j += 1
+            if val_lines:
+                kv_map[matched_key] = val_lines[0]
+                i = j
+                continue
+        i += 1
+
+    if kv_map.get('type') and (kv_map.get('value') or kv_map.get('rr')):
+        rtype = _normalize_record_type(kv_map.get('type', ''))
+        if rtype:
+            rec = {
+                'type': rtype,
+                'rr': (kv_map.get('rr') or '@').strip().rstrip('.'),
+                'value': (kv_map.get('value') or '').strip(),
+                'ttl': int(kv_map['ttl']) if kv_map.get('ttl', '').isdigit() else 600,
+                'domain': (kv_map.get('domain') or '').rstrip('.'),
+                'line': kv_map.get('line', 'default'),
+            }
+            if rec['value']:
+                out.append(normalize_console_table_record(rec))
+
+    multi_rr = kv_map.get('rr', '')
+    multi_val = kv_map.get('value', '')
+    if not out and '\n' in multi_val:
+        for v in multi_val.split('\n'):
+            v = v.strip()
+            if v:
+                rec = dict(kv_map)
+                rec['value'] = v
+                rec['type'] = _normalize_record_type(rec.get('type', ''))
+                if rec['type']:
+                    out.append(normalize_console_table_record(rec))
+
+    return out
+
+
 def parse_console_table_text(text: str) -> list[dict]:
-    """解析控制台复制的表格行。"""
+    """解析控制台复制的表格行，或 SSL 验证页键值对格式。"""
     out: list[dict] = []
     for line in (text or '').splitlines():
         line = line.strip()
@@ -141,7 +213,14 @@ def parse_console_table_text(text: str) -> list[dict]:
             'domain': domain.rstrip('.') if domain else '',
         }
         out.append(normalize_console_table_record(rec))
-    return enrich_records_with_domain_hints(out, text)
+
+    if not out:
+        out = _parse_key_value_text(text)
+
+    out = enrich_records_with_domain_hints(out, text)
+    for rec in out:
+        normalize_console_table_record(rec)
+    return out
 
 
 def _save_image_temp(image_base64: str) -> str:
@@ -167,6 +246,7 @@ def _build_prompt(text: str, image_path: str, domain_hint: str) -> str:
         '你是 DNS 解析助手。从文本或截图中提取 DNS 解析记录。',
         '只输出 JSON 数组，不要 markdown 代码块，不要解释。',
         '每项字段：type(A/AAAA/CNAME/MX/TXT/NS/SRV/CAA)、rr、value、ttl(默认600)、domain(根域)。',
+        'rr 是相对于 domain 的主机记录，不要包含域名后缀。例如 domain=dingdong.work 则 rr 应为 _dnsauth.sub 而非 _dnsauth.sub.dingdong.work。',
         '控制台「校验域名」列若是完整主机名，请写入 domain 并在 rr 填相对记录名。',
     ]
     if hint:
@@ -224,7 +304,10 @@ def _normalize_records(items: list[dict], text: str = '') -> list[dict]:
             'domain': str(item.get('domain') or item.get('Domain') or '').strip().rstrip('.'),
         }
         out.append(normalize_console_table_record(rec))
-    return enrich_records_with_domain_hints(out, text)
+    out = enrich_records_with_domain_hints(out, text)
+    for rec in out:
+        normalize_console_table_record(rec)
+    return out
 
 
 def _subprocess_hidden_kwargs() -> dict:
@@ -333,6 +416,71 @@ def _run_agent(
     return stdout
 
 
+def _run_siliconflow_api(
+    text: str,
+    image_base64: str,
+    domain_hint: str,
+    parse_cfg: dict | None = None,
+    timeout_sec: int = 120,
+) -> str:
+    import requests as _req
+
+    parse_cfg = parse_cfg or get_dns_parse_config()
+    api_key = (parse_cfg.get('sf_api_key') or '').strip()
+    base_url = (parse_cfg.get('sf_base_url') or '').strip() or 'https://api.siliconflow.cn/v1'
+    model = (parse_cfg.get('sf_model') or '').strip() or 'Qwen/Qwen2.5-VL-72B-Instruct'
+
+    if not api_key:
+        raise RuntimeError('未配置 SiliconFlow API Key，请在 data/dns_parse_config.json 中设置 sf_api_key')
+
+    prompt_parts = [
+        '你是 DNS 解析助手。从文本或截图中提取 DNS 解析记录。',
+        '只输出 JSON 数组，不要 markdown 代码块，不要解释。',
+        '每项字段：type(A/AAAA/CNAME/MX/TXT/NS/SRV/CAA)、rr、value、ttl(默认600)、domain(根域)。',
+        'rr 是相对于 domain 的主机记录，不要包含域名后缀。例如 domain=dingdong.work 则 rr 应为 _dnsauth.sub 而非 _dnsauth.sub.dingdong.work。',
+        '控制台「校验域名」列若是完整主机名，请写入 domain 并在 rr 填相对记录名。',
+    ]
+    hint = (domain_hint or '').strip()
+    if hint:
+        prompt_parts.append('优先根域：%s' % hint)
+    if text:
+        prompt_parts.append('文本：\n' + text)
+
+    content = []
+    if image_base64:
+        raw = image_base64.strip()
+        if not raw.startswith('data:'):
+            raw = 'data:image/png;base64,' + raw
+        content.append({'type': 'image_url', 'image_url': {'url': raw}})
+    content.append({'type': 'text', 'text': '\n'.join(prompt_parts)})
+
+    messages = [{'role': 'user', 'content': content}]
+    payload = {'model': model, 'messages': messages, 'max_tokens': 4096, 'temperature': 0.1}
+
+    proxies = None
+    proxy = (parse_cfg.get('proxy_url') or '').strip()
+    if proxy:
+        proxies = {'http': proxy, 'https': proxy}
+
+    resp = _req.post(
+        base_url.rstrip('/') + '/chat/completions',
+        json=payload,
+        headers={
+            'Authorization': 'Bearer ' + api_key,
+            'Content-Type': 'application/json',
+        },
+        proxies=proxies,
+        timeout=timeout_sec,
+    )
+    if resp.status_code != 200:
+        raise RuntimeError('SiliconFlow API 错误 %d: %s' % (resp.status_code, resp.text[:500]))
+    data = resp.json()
+    choices = data.get('choices') or []
+    if not choices:
+        raise RuntimeError('SiliconFlow API 未返回内容')
+    return (choices[0].get('message') or {}).get('content') or ''
+
+
 def _store_result(run_id: str, payload: dict) -> None:
     with _LOCK:
         _PARSE_RESULTS[run_id] = payload
@@ -348,6 +496,7 @@ def start_parse_async(
     image_base64: str = '',
     domain_hint: str = '',
     settings: dict | None = None,
+    use_api: bool = False,
 ) -> dict:
     parse_cfg = get_dns_parse_config()
     if not parse_cfg.get('enabled', True):
@@ -358,10 +507,15 @@ def start_parse_async(
     if not text and not image_base64:
         return {'success': False, 'message': '请粘贴文本或图片后再识别'}
 
+    sf_key = (parse_cfg.get('sf_api_key') or '').strip()
+    if sf_key:
+        use_api = True
+
     run_id = create_run({
         'kind': 'dns_ai_parse',
         'domain_hint': domain_hint or '',
         'has_image': bool(image_base64),
+        'mode': 'api' if use_api else 'cli',
     })
 
     with _LOCK:
@@ -373,19 +527,25 @@ def start_parse_async(
         image_path = ''
         try:
             live_cfg = get_dns_parse_config()
-            live_key = (live_cfg.get('cursor_api_key') or '').strip()
-            _, model_label = resolve_cursor_model(live_cfg)
+            live_sf_key = (live_cfg.get('sf_api_key') or '').strip()
+            is_api = use_api or bool(live_sf_key)
 
             append_log(run_id, '[INFO] 状态：识别中\n')
-            if live_key:
-                append_log(run_id, '[INFO] 认证：API Key\n')
-            else:
-                append_log(run_id, '[INFO] 认证：本机\n')
-            append_log(run_id, '[INFO] 模型：%s\n' % model_label)
-            agent_path = _resolve_agent_executable(live_cfg)
-            append_log(run_id, '[INFO] Agent：%s\n' % agent_path)
+            append_log(run_id, '[INFO] 模式：%s\n' % ('SiliconFlow API' if is_api else 'Cursor CLI'))
 
-            if image_base64:
+            if is_api:
+                sf_model = (live_cfg.get('sf_model') or '').strip() or DEFAULT_SILICONFLOW_MODEL
+                append_log(run_id, '[INFO] 模型：%s\n' % sf_model)
+            else:
+                live_key = (live_cfg.get('cursor_api_key') or '').strip()
+                _, model_label = resolve_cursor_model(live_cfg)
+                if live_key:
+                    append_log(run_id, '[INFO] 认证：API Key\n')
+                else:
+                    append_log(run_id, '[INFO] 认证：本机\n')
+                append_log(run_id, '[INFO] 模型：%s\n' % model_label)
+
+            if image_base64 and not is_api:
                 append_log(run_id, '[INFO] 图片：处理中\n')
                 image_path = _save_image_temp(image_base64)
 
@@ -400,13 +560,23 @@ def start_parse_async(
                     logger.info('dns_ai_parse local_table run_id=%s count=%d', run_id, len(records))
                     return
 
-            append_log(run_id, '[INFO] Agent：执行中\n')
-            prompt = _build_prompt(text, image_path, domain_hint)
-            output = _run_agent(agent_path, prompt, live_key, parse_cfg=live_cfg)
-            append_log(run_id, '[INFO] 输出：\n%s\n' % (output[:2000] + ('...' if len(output) > 2000 else '')))
+            if is_api:
+                append_log(run_id, '[INFO] API：请求中\n')
+                output = _run_siliconflow_api(text, image_base64, domain_hint, parse_cfg=live_cfg)
+                append_log(run_id, '[INFO] 输出：\n%s\n' % (output[:2000] + ('...' if len(output) > 2000 else '')))
+                items = _extract_json_array(output)
+                records = _normalize_records(items, text)
+            else:
+                append_log(run_id, '[INFO] Agent：执行中\n')
+                agent_path = _resolve_agent_executable(live_cfg)
+                append_log(run_id, '[INFO] Agent：%s\n' % agent_path)
+                live_key = (live_cfg.get('cursor_api_key') or '').strip()
+                prompt = _build_prompt(text, image_path, domain_hint)
+                output = _run_agent(agent_path, prompt, live_key, parse_cfg=live_cfg)
+                append_log(run_id, '[INFO] 输出：\n%s\n' % (output[:2000] + ('...' if len(output) > 2000 else '')))
+                items = _extract_json_array(output)
+                records = _normalize_records(items, text)
 
-            items = _extract_json_array(output)
-            records = _normalize_records(items, text)
             if not records and text:
                 records = parse_console_table_text(text)
             append_log(run_id, '[INFO] 记录：%d 条\n' % len(records))
@@ -414,12 +584,12 @@ def start_parse_async(
                 append_log(run_id, '[INFO] %s\n' % json.dumps(records, ensure_ascii=False))
 
             if not records:
-                finish_log(run_id, False, '未能从 Agent 输出解析出 DNS 记录')
+                finish_log(run_id, False, '未能解析出 DNS 记录')
                 _store_result(run_id, {'records': [], 'message': '未能解析出 DNS 记录'})
                 logger.info('dns_ai_parse empty run_id=%s', run_id)
                 return
 
-            _store_result(run_id, {'records': records, 'source': 'ai'})
+            _store_result(run_id, {'records': records, 'source': 'api' if is_api else 'ai'})
             finish_log(run_id, True, '识别成功')
             append_log(run_id, '[SUCCESS] 记录：%d 条\n' % len(records))
             logger.info('dns_ai_parse success run_id=%s count=%d', run_id, len(records))
