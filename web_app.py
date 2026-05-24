@@ -24,7 +24,16 @@ from backend.dns_parse_config import (
     get_dns_parse_config_public,
     update_dns_parse_config,
 )
+from backend.dns_oplog import append_log, query_logs
+from backend.dns_import_log import (
+    append_import_log,
+    query_import_logs,
+    log_info as import_log_info,
+    new_session_id,
+)
+from backend.logger import get_logger
 
+logger = get_logger('web_app')
 app = Flask(__name__, static_folder='web_frontend', static_url_path='')
 
 _SECRET_KEYWORDS = ('secret', 'token', 'key', 'password', 'access_key')
@@ -136,11 +145,51 @@ def dns_add_record(provider):
     for key in required:
         if not params.get(key):
             return _fail(f'缺少必要参数: {key}')
+    domain = params.get('domain', '')
     try:
         config = _get_dns_config()
         result = add_record(provider, config, **params)
+        append_log('add', provider, domain,
+                   detail={'type': params.get('type'), 'rr': params.get('rr'), 'value': params.get('value')},
+                   source='web', success=True, message='添加记录')
+        session_id = (params.get('session_id') or '').strip()
+        if session_id:
+            append_import_log(
+                'import_item',
+                '添加记录成功',
+                {
+                    'provider': provider,
+                    'domain': domain,
+                    'type': params.get('type'),
+                    'rr': params.get('rr'),
+                    'value': params.get('value'),
+                    'ttl': params.get('ttl'),
+                    'result': result,
+                },
+                session_id=session_id,
+                success=True,
+            )
         return _ok(result)
     except Exception as e:
+        append_log('add', provider, domain,
+                   detail={'type': params.get('type'), 'rr': params.get('rr'), 'value': params.get('value')},
+                   source='web', success=False, message=str(e))
+        session_id = (params.get('session_id') or '').strip()
+        if session_id:
+            append_import_log(
+                'import_item',
+                '添加记录失败',
+                {
+                    'provider': provider,
+                    'domain': domain,
+                    'type': params.get('type'),
+                    'rr': params.get('rr'),
+                    'value': params.get('value'),
+                    'error': str(e),
+                },
+                session_id=session_id,
+                success=False,
+            )
         return _fail(str(e))
 
 
@@ -151,11 +200,20 @@ def dns_update_record(provider):
     for key in required:
         if not params.get(key):
             return _fail(f'缺少必要参数: {key}')
+    domain = params.get('domain', '')
     try:
         config = _get_dns_config()
         result = update_record(provider, config, **params)
+        append_log('update', provider, domain,
+                   detail={'record_id': params.get('record_id'), 'type': params.get('type'),
+                           'rr': params.get('rr'), 'value': params.get('value')},
+                   source='web', success=True, message='修改记录')
         return _ok(result)
     except Exception as e:
+        append_log('update', provider, domain,
+                   detail={'record_id': params.get('record_id'), 'type': params.get('type'),
+                           'rr': params.get('rr'), 'value': params.get('value')},
+                   source='web', success=False, message=str(e))
         return _fail(str(e))
 
 
@@ -164,11 +222,18 @@ def dns_delete_record(provider):
     params = request.get_json(silent=True) or {}
     if not params.get('record_id'):
         return _fail('缺少必要参数: record_id')
+    domain = params.get('domain', '')
     try:
         config = _get_dns_config()
         result = delete_record(provider, config, **params)
+        append_log('delete', provider, domain,
+                   detail={'record_id': params.get('record_id')},
+                   source='web', success=True, message='删除记录')
         return _ok(result)
     except Exception as e:
+        append_log('delete', provider, domain,
+                   detail={'record_id': params.get('record_id')},
+                   source='web', success=False, message=str(e))
         return _fail(str(e))
 
 
@@ -185,6 +250,28 @@ def dns_detect():
         return _fail(str(e))
 
 
+def _normalize_rr_for_compare(rr: str, domain: str) -> str:
+    rr = (rr or '').strip()
+    if not rr or rr == '@':
+        return '@'
+    domain_lower = (domain or '').strip().lower().rstrip('.')
+    if not domain_lower:
+        return rr.lower()
+    if rr.lower() == domain_lower:
+        return '@'
+    suffix = '.' + domain_lower
+    if rr.lower().endswith(suffix):
+        rr = rr[: -len(suffix)].rstrip('.')
+    return (rr or '@').lower()
+
+
+def _normalize_value_for_compare(value: str) -> str:
+    v = (value or '').strip()
+    if len(v) >= 2 and ((v[0] == '"' and v[-1] == '"') or (v[0] == "'" and v[-1] == "'")):
+        v = v[1:-1]
+    return v
+
+
 @app.route('/api/dns/records-check/<provider>', methods=['POST'])
 def dns_records_check(provider):
     body = request.get_json(silent=True) or {}
@@ -195,37 +282,71 @@ def dns_records_check(provider):
     try:
         config = _get_dns_config()
         existing = get_records(provider, domain, config)
-        domain_lower = domain.lower().rstrip('.')
         results = []
         for rec in records:
             rtype = (rec.get('type') or '').upper()
-            rr = (rec.get('rr') or '').strip()
-            value = (rec.get('value') or '').strip()
-            if rr and rr != '@':
-                if rr.lower() == domain_lower:
-                    rr = '@'
-                elif rr.lower().endswith('.' + domain_lower):
-                    rr = rr[:-(len(domain_lower) + 1)].rstrip('.')
+            rr = _normalize_rr_for_compare(rec.get('rr') or '', domain)
+            value = _normalize_value_for_compare(rec.get('value') or '')
+            # 冲突检测规则与桌面端一致：type + rr 相同即冲突
             match = None
+            conflict = None
             for ex in existing:
                 ex_type = ex.get('Type', '').upper()
-                ex_rr = ex.get('RR', '').strip()
+                ex_rr = _normalize_rr_for_compare(ex.get('RR', ''), domain)
+                ex_value = _normalize_value_for_compare(ex.get('Value', ''))
                 if ex_type == rtype and ex_rr == rr:
-                    match = ex
-                    break
+                    conflict = ex
+                    if ex_value == value:
+                        match = ex
+                        break
             if match:
-                if match.get('Value', '').strip() == value:
-                    results.append({'status': 'exists', 'message': '记录已存在且值相同', 'existing': match})
-                else:
-                    results.append({'status': 'conflict', 'message': '同类型同主机记录已存在，值不同', 'existing': match})
+                results.append({'status': 'exists', 'message': '记录已存在', 'existing': match})
+            elif conflict:
+                results.append({'status': 'conflict', 'message': '冲突：相同类型和主机记录已存在', 'existing': conflict})
             else:
-                results.append({'status': 'new', 'message': '新记录，可添加', 'existing': None})
+                results.append({'status': 'new', 'message': '新记录，可导入', 'existing': None})
+        session_id = (body.get('session_id') or '').strip()
+        if session_id:
+            append_import_log(
+                'check_done',
+                '存在性检测完成',
+                {
+                    'provider': provider,
+                    'domain': domain,
+                    'records': records,
+                    'results': results,
+                },
+                session_id=session_id,
+            )
         return _ok({'results': results})
     except Exception as e:
+        session_id = (body.get('session_id') or '').strip()
+        if session_id:
+            append_import_log(
+                'check_fail',
+                '存在性检测失败',
+                {'provider': provider, 'domain': domain, 'error': str(e)},
+                session_id=session_id,
+                success=False,
+            )
         return _fail(str(e))
 
 
 # ==================== 设置 API（只读状态，不提供密钥写入） ====================
+
+@app.route('/api/dns/oplog', methods=['GET'])
+def dns_get_oplog():
+    provider = request.args.get('provider', '')
+    domain = request.args.get('domain', '')
+    action = request.args.get('action', '')
+    limit = int(request.args.get('limit', 100))
+    offset = int(request.args.get('offset', 0))
+    try:
+        data = query_logs(provider=provider, domain=domain, action=action,
+                          limit=min(limit, 500), offset=offset)
+        return _ok(data)
+    except Exception as e:
+        return _fail(str(e))
 
 @app.route('/api/settings/status', methods=['GET'])
 def get_settings_status():
@@ -239,23 +360,95 @@ def get_settings_status():
 
 # ==================== AI 解析 API ====================
 
+@app.route('/api/dns/import-log', methods=['POST'])
+def dns_import_log_append():
+    body = request.get_json(silent=True) or {}
+    try:
+        entry = append_import_log(
+            phase=body.get('phase', 'info'),
+            message=body.get('message', ''),
+            detail=body.get('detail'),
+            session_id=body.get('session_id', ''),
+            source=body.get('source', 'web'),
+            success=bool(body.get('success', True)),
+        )
+        return _ok(entry)
+    except Exception as e:
+        logger.exception('dns_import_log_append failed: %s', e)
+        return _fail(str(e))
+
+
+@app.route('/api/dns/import-log', methods=['GET'])
+def dns_import_log_query():
+    session_id = request.args.get('session_id', '')
+    phase = request.args.get('phase', '')
+    limit = int(request.args.get('limit', 100))
+    offset = int(request.args.get('offset', 0))
+    try:
+        data = query_import_logs(
+            session_id=session_id,
+            phase=phase,
+            limit=min(limit, 500),
+            offset=offset,
+        )
+        return _ok(data)
+    except Exception as e:
+        return _fail(str(e))
+
+
+@app.route('/api/dns/import-log/info', methods=['GET'])
+def dns_import_log_path():
+    try:
+        return _ok(import_log_info())
+    except Exception as e:
+        return _fail(str(e))
+
+
 @app.route('/api/dns/ai/parse', methods=['POST'])
 def dns_ai_parse_start():
     body = request.get_json(silent=True) or {}
     text = body.get('text', '')
     image_base64 = body.get('image_base64', '')
     domain_hint = body.get('domain_hint', '')
+    session_id = (body.get('session_id') or '').strip() or new_session_id()
     try:
+        append_import_log(
+            'parse_start',
+            '收到解析请求',
+            {
+                'has_image': bool(image_base64),
+                'text_len': len(text or ''),
+                'domain_hint': domain_hint or '',
+            },
+            session_id=session_id,
+        )
         result = start_parse_async(
             text=text or '',
             image_base64=image_base64 or '',
             domain_hint=domain_hint or '',
             use_api=True,
+            session_id=session_id,
         )
         if result.get('success'):
-            return _ok(result.get('data'), message=result.get('message', ''))
+            payload = dict(result.get('data') or {})
+            payload['session_id'] = session_id
+            return _ok(payload, message=result.get('message', ''))
+        append_import_log(
+            'parse_fail',
+            result.get('message', '识别失败'),
+            {'domain_hint': domain_hint or ''},
+            session_id=session_id,
+            success=False,
+        )
         return _fail(result.get('message', '识别失败'))
     except Exception as e:
+        append_import_log(
+            'parse_fail',
+            str(e),
+            {'domain_hint': domain_hint or ''},
+            session_id=session_id,
+            success=False,
+        )
         return _fail(str(e))
 
 

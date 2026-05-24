@@ -26,8 +26,10 @@ from .dns_detect import (
     enrich_records_with_domain_hints,
     normalize_console_table_record,
 )
+from .dns_import_log import append_import_log as _append_import_log
 
 logger = get_logger('dns_ai_parse')
+DEFAULT_SILICONFLOW_MODEL = 'Qwen/Qwen2.5-VL-72B-Instruct'
 
 _PARSE_RESULTS: dict[str, dict] = {}
 _LOCK = threading.RLock()
@@ -491,12 +493,36 @@ def get_parse_result(run_id: str) -> dict | None:
         return _PARSE_RESULTS.get(run_id)
 
 
+def _persist_import_log(
+    session_id: str,
+    phase: str,
+    message: str,
+    detail: dict | None = None,
+    *,
+    success: bool = True,
+) -> None:
+    if not (session_id or '').strip():
+        return
+    try:
+        _append_import_log(
+            phase,
+            message,
+            detail,
+            session_id=session_id,
+            source='ai_parse',
+            success=success,
+        )
+    except Exception:
+        logger.exception('dns_import_log write failed session=%s phase=%s', session_id, phase)
+
+
 def start_parse_async(
     text: str = '',
     image_base64: str = '',
     domain_hint: str = '',
     settings: dict | None = None,
     use_api: bool = False,
+    session_id: str = '',
 ) -> dict:
     parse_cfg = get_dns_parse_config()
     if not parse_cfg.get('enabled', True):
@@ -511,11 +537,13 @@ def start_parse_async(
     if sf_key:
         use_api = True
 
+    session_id = (session_id or '').strip()
     run_id = create_run({
         'kind': 'dns_ai_parse',
         'domain_hint': domain_hint or '',
         'has_image': bool(image_base64),
         'mode': 'api' if use_api else 'cli',
+        'session_id': session_id,
     })
 
     with _LOCK:
@@ -525,7 +553,14 @@ def start_parse_async(
 
     def _worker():
         image_path = ''
+        sid = session_id
         try:
+            _persist_import_log(sid, 'parse_start', 'AI 解析任务开始', {
+                'run_id': run_id,
+                'has_image': bool(image_base64),
+                'text_len': len(text),
+                'domain_hint': domain_hint or '',
+            })
             live_cfg = get_dns_parse_config()
             live_sf_key = (live_cfg.get('sf_api_key') or '').strip()
             is_api = use_api or bool(live_sf_key)
@@ -557,6 +592,12 @@ def start_parse_async(
                     append_log(run_id, '[INFO] %s\n' % json.dumps(records, ensure_ascii=False))
                     _store_result(run_id, {'records': records, 'source': 'console_table'})
                     finish_log(run_id, True, '本地表格解析成功')
+                    _persist_import_log(sid, 'parse_done', '本地表格解析成功', {
+                        'run_id': run_id,
+                        'source': 'console_table',
+                        'records_count': len(records),
+                        'records': records,
+                    })
                     logger.info('dns_ai_parse local_table run_id=%s count=%d', run_id, len(records))
                     return
 
@@ -586,12 +627,22 @@ def start_parse_async(
             if not records:
                 finish_log(run_id, False, '未能解析出 DNS 记录')
                 _store_result(run_id, {'records': [], 'message': '未能解析出 DNS 记录'})
+                _persist_import_log(sid, 'parse_fail', '未能解析出 DNS 记录', {
+                    'run_id': run_id,
+                }, success=False)
                 logger.info('dns_ai_parse empty run_id=%s', run_id)
                 return
 
-            _store_result(run_id, {'records': records, 'source': 'api' if is_api else 'ai'})
+            src = 'api' if is_api else 'ai'
+            _store_result(run_id, {'records': records, 'source': src})
             finish_log(run_id, True, '识别成功')
             append_log(run_id, '[SUCCESS] 记录：%d 条\n' % len(records))
+            _persist_import_log(sid, 'parse_done', 'AI 解析成功', {
+                'run_id': run_id,
+                'source': src,
+                'records_count': len(records),
+                'records': records,
+            })
             logger.info('dns_ai_parse success run_id=%s count=%d', run_id, len(records))
         except Exception as exc:
             tb = traceback.format_exc()
@@ -600,6 +651,10 @@ def start_parse_async(
             append_log(run_id, tb)
             finish_log(run_id, False, str(exc))
             _store_result(run_id, {'records': [], 'message': str(exc)})
+            _persist_import_log(sid, 'parse_fail', str(exc), {
+                'run_id': run_id,
+                'traceback': tb,
+            }, success=False)
         finally:
             if image_path and os.path.isfile(image_path):
                 try:

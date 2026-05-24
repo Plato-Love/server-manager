@@ -1822,12 +1822,20 @@ function _normalizeDnsRrForCompare(rr) {
     return r === '' ? '@' : r;
 }
 
+function _normalizeDnsValueForCompare(value) {
+    var v = String(value || '').trim();
+    if (v.length >= 2 && ((v[0] === '"' && v[v.length - 1] === '"') || (v[0] === "'" && v[v.length - 1] === "'"))) {
+        v = v.slice(1, -1);
+    }
+    return v;
+}
+
 function _dnsRecordCompareKey(domain, type, rr, value) {
     return [
         String(domain || '').trim().toLowerCase(),
         String(type || '').trim().toUpperCase(),
         _normalizeDnsRrForCompare(rr),
-        String(value || '').trim()
+        _normalizeDnsValueForCompare(value)
     ].join('|');
 }
 
@@ -3009,6 +3017,7 @@ function _buildDnsImportPreviewHtml(records, existingKeySetByDomain, meta) {
             });
             html += '<div class="dns-import-field"><label>目标域名</label><select class="form-input dns-import-domain">' + domainOptions + '</select></div>';
         }
+        html += '<div class="dns-import-field"><label>主机记录</label><input type="text" class="form-input dns-import-rr" value="' + escapeAttr(rec.rr) + '"></div>';
         html += '<div class="dns-import-field"><label>类型';
         if (isDup) html += '<span class="dns-import-dup-badge">已存在</span>';
         else if (checking) html += '<span class="dns-import-dup-badge" style="color:var(--text-muted);background:transparent">比对中</span>';
@@ -3018,7 +3027,6 @@ function _buildDnsImportPreviewHtml(records, existingKeySetByDomain, meta) {
         });
         html += '</select></div></div>';
         html += '<div class="dns-import-row dns-import-row-2">';
-        html += '<div class="dns-import-field"><label>主机记录</label><input type="text" class="form-input dns-import-rr" value="' + escapeAttr(rec.rr) + '"></div>';
         html += '<div class="dns-import-field"><label>记录值</label><input type="text" class="form-input dns-import-value" value="' + escapeAttr(rec.value) + '"></div>';
         html += '<div class="dns-import-field"><label>TTL</label><input type="number" class="form-input dns-import-ttl" value="' + rec.ttl + '"></div>';
         html += '<div class="dns-import-field dns-import-field-action"><button type="button" class="btn btn-sm btn-icon-danger" onclick="removeDnsImportRow(' + idx + ')" title="移除">'
@@ -3217,7 +3225,7 @@ function _runDnsAiRecognize(text) {
                     _appendGlobalLog('[DNS导入] AI 解析完成，共 ' + records.length + ' 条\n');
                     _appendGlobalLog(JSON.stringify(records, null, 2) + '\n');
                     document.getElementById('dns-import-text').value = JSON.stringify(records, null, 2);
-                    uiRunBusy('dns-import-modal', '正在生成预览并比对记录…', function () {
+                    uiRunBusy('dns-import-modal', '比对中…', function () {
                         return showDnsImportPreview(records).then(function (ok) {
                             _afterDnsImportParsed(records, 'ai', ok, { runId: runId });
                         });

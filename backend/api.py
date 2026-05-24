@@ -34,6 +34,8 @@ from .dns_parse_config import (
 )
 from .dns_ai_parse import poll_parse as _poll_dns_ai_parse, start_parse_async as _start_dns_ai_parse
 from .dns_detect import detect_provider_for_domain as _detect_provider_for_domain
+from .dns_oplog import append_log as _append_oplog, query_logs as _query_oplog
+from .dns_import_log import append_import_log as _append_import_log, log_info as _import_log_info
 from .logger import get_logger
 
 logger = get_logger('api')
@@ -263,19 +265,42 @@ class Api:
         for key in required:
             if not params.get(key):
                 return {'success': False, 'message': f'缺少必要参数: {key}'}
+        domain = params.get('domain', '')
         try:
             config = self._get_dns_config()
             result = add_record(provider, config, **params)
             logger.info(
                 'dns_add_record success provider=%s domain=%s type=%s rr=%s',
-                provider, params.get('domain', ''), params.get('type', ''), params.get('rr', '')
+                provider, domain, params.get('type', ''), params.get('rr', '')
             )
+            _append_oplog('add', provider, domain,
+                          detail={'type': params.get('type'), 'rr': params.get('rr'), 'value': params.get('value')},
+                          source='desktop', success=True, message='添加记录')
+            session_id = (params.get('session_id') or '').strip()
+            if session_id:
+                _append_import_log(
+                    'import_item', '添加记录成功',
+                    {'provider': provider, 'domain': domain, 'type': params.get('type'),
+                     'rr': params.get('rr'), 'value': params.get('value'), 'result': result},
+                    session_id=session_id, source='desktop', success=True,
+                )
             return {'success': True, 'data': result}
         except Exception as e:
             logger.exception(
                 'dns_add_record failed provider=%s domain=%s type=%s rr=%s error=%s',
-                provider, params.get('domain', ''), params.get('type', ''), params.get('rr', ''), e
+                provider, domain, params.get('type', ''), params.get('rr', ''), e
             )
+            _append_oplog('add', provider, domain,
+                          detail={'type': params.get('type'), 'rr': params.get('rr'), 'value': params.get('value')},
+                          source='desktop', success=False, message=str(e))
+            session_id = (params.get('session_id') or '').strip()
+            if session_id:
+                _append_import_log(
+                    'import_item', '添加记录失败',
+                    {'provider': provider, 'domain': domain, 'type': params.get('type'),
+                     'rr': params.get('rr'), 'value': params.get('value'), 'error': str(e)},
+                    session_id=session_id, source='desktop', success=False,
+                )
             return {'success': False, 'message': str(e)}
 
     def dns_delete_record(self, provider, params):
@@ -284,19 +309,26 @@ class Api:
             return {'success': False, 'message': '参数格式错误'}
         if not params.get('record_id'):
             return {'success': False, 'message': '缺少必要参数: record_id'}
+        domain = params.get('domain', '')
         try:
             config = self._get_dns_config()
             result = delete_record(provider, config, **params)
             logger.info(
                 'dns_delete_record success provider=%s domain=%s record_id=%s',
-                provider, params.get('domain', ''), params.get('record_id', '')
+                provider, domain, params.get('record_id', '')
             )
+            _append_oplog('delete', provider, domain,
+                          detail={'record_id': params.get('record_id')},
+                          source='desktop', success=True, message='删除记录')
             return {'success': True, 'data': result}
         except Exception as e:
             logger.exception(
                 'dns_delete_record failed provider=%s domain=%s record_id=%s error=%s',
-                provider, params.get('domain', ''), params.get('record_id', ''), e
+                provider, domain, params.get('record_id', ''), e
             )
+            _append_oplog('delete', provider, domain,
+                          detail={'record_id': params.get('record_id')},
+                          source='desktop', success=False, message=str(e))
             return {'success': False, 'message': str(e)}
 
     def dns_update_record(self, provider, params):
@@ -307,19 +339,38 @@ class Api:
         for key in required:
             if not params.get(key):
                 return {'success': False, 'message': f'缺少必要参数: {key}'}
+        domain = params.get('domain', '')
         try:
             config = self._get_dns_config()
             result = update_record(provider, config, **params)
             logger.info(
                 'dns_update_record success provider=%s domain=%s type=%s rr=%s record_id=%s',
-                provider, params.get('domain', ''), params.get('type', ''), params.get('rr', ''), params.get('record_id', '')
+                provider, domain, params.get('type', ''), params.get('rr', ''), params.get('record_id', '')
             )
+            _append_oplog('update', provider, domain,
+                          detail={'record_id': params.get('record_id'), 'type': params.get('type'),
+                                  'rr': params.get('rr'), 'value': params.get('value')},
+                          source='desktop', success=True, message='修改记录')
             return {'success': True, 'data': result}
         except Exception as e:
             logger.exception(
                 'dns_update_record failed provider=%s domain=%s type=%s rr=%s record_id=%s error=%s',
-                provider, params.get('domain', ''), params.get('type', ''), params.get('rr', ''), params.get('record_id', ''), e
+                provider, domain, params.get('type', ''), params.get('rr', ''), params.get('record_id', ''), e
             )
+            _append_oplog('update', provider, domain,
+                          detail={'record_id': params.get('record_id'), 'type': params.get('type'),
+                                  'rr': params.get('rr'), 'value': params.get('value')},
+                          source='desktop', success=False, message=str(e))
+            return {'success': False, 'message': str(e)}
+
+    def dns_get_oplog(self, provider='', domain='', action='', limit=100, offset=0):
+        """查询 DNS 操作日志"""
+        try:
+            data = _query_oplog(provider=provider, domain=domain, action=action,
+                                limit=min(int(limit), 500), offset=int(offset))
+            return {'success': True, 'data': data}
+        except Exception as e:
+            logger.exception('dns_get_oplog failed: %s', e)
             return {'success': False, 'message': str(e)}
 
     def dns_get_clipboard_image(self):
